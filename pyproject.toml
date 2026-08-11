@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rivet-floorplan"
+version = "0.1.0"
+description = "A generative floor plan engine: design, render, and export architecturally-constrained floor plans to DXF."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Rivet Contributors" }]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+]
+dependencies = [
+    "networkx>=3.2",
+    "numpy>=1.26.0",
+    "Pillow>=10.0.0,<11.0.0",
+    "svgwrite>=1.4.3",
+    "ezdxf>=1.1.0",
+    "Flask>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.4.0",
+]
+
+[project.scripts]
+rivet = "rivet.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/SRILSHUKLA/rivet"
+Issues = "https://github.com/SRILSHUKLA/rivet/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
