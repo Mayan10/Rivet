@@ -185,6 +185,7 @@ class Layout:
 
     candidate_id: str
     plot: PlotSpec
+    buildable: Rect
     rooms: list[RoomInstance] = field(default_factory=list)
     openings: list[Opening] = field(default_factory=list)
     score: float = 0.0

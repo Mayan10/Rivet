@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import Rect
+from .models import Orientation, Rect
 
 
 @dataclass(frozen=True)
@@ -75,3 +75,26 @@ def boundary_edges(rect: Rect, boundary: Rect, tol: float = 1e-3) -> list[Shared
     if abs(rect.y2 - boundary.y2) <= tol:
         edges.append(SharedWall(axis="horizontal", coord=rect.y2, lo=rect.x, hi=rect.x2))
     return edges
+
+
+_ENTRANCE_EDGE_MAP = {
+    Orientation.NORTH: "y2",
+    Orientation.SOUTH: "y",
+    Orientation.EAST: "x2",
+    Orientation.WEST: "x",
+}
+
+
+def entrance_edge(entrance: Orientation) -> str:
+    """Which side of the buildable rect the front door sits on."""
+    return _ENTRANCE_EDGE_MAP[entrance]
+
+
+def room_touches_edge(rect: Rect, boundary: Rect, edge: str, tol: float = 1e-3) -> bool:
+    if edge == "y2":
+        return abs(rect.y2 - boundary.y2) <= tol
+    if edge == "y":
+        return abs(rect.y - boundary.y) <= tol
+    if edge == "x2":
+        return abs(rect.x2 - boundary.x2) <= tol
+    return abs(rect.x - boundary.x) <= tol

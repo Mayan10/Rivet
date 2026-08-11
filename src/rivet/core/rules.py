@@ -120,12 +120,20 @@ def setbacks_for(plot_area_sqm: float) -> Setbacks:
 # ---------------------------------------------------------------------------
 
 # Soft preferences: rooms that should share a wall when possible. Symmetric.
+#
+# Note: there is deliberately no generic (BEDROOM, BATHROOM) style pair here.
+# That relationship is handled per-instance by ``RoomRequirement.attached_bathroom``
+# in core/graph.py, which creates one dedicated *required* edge per en-suite.
+# A generic type-level preference would instead make *every* bedroom prefer
+# *every* bathroom in the request — an edge count that grows with
+# bedrooms x bathrooms and that no single-wall-per-room geometry could ever
+# satisfy, which would push every candidate's adjacency score toward zero
+# regardless of actual layout quality. Bedrooms reach a shared/family
+# bathroom via the corridor pairs below instead.
 ADJACENCY_PREFERRED: list[tuple[RoomType, RoomType]] = [
     (RoomType.KITCHEN, RoomType.DINING_ROOM),
     (RoomType.DINING_ROOM, RoomType.LIVING_ROOM),
     (RoomType.LIVING_ROOM, RoomType.FOYER),
-    (RoomType.MASTER_BEDROOM, RoomType.BATHROOM),
-    (RoomType.BEDROOM, RoomType.BATHROOM),
     (RoomType.FOYER, RoomType.CORRIDOR),
     (RoomType.CORRIDOR, RoomType.BEDROOM),
     (RoomType.CORRIDOR, RoomType.MASTER_BEDROOM),
