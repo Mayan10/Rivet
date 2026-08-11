@@ -72,7 +72,13 @@ def _graph_guided_order(nodes: list[RoomNode], graph: nx.Graph, rng: random.Rand
     in the ordering, which the slicing tree tends to keep close in space.
     """
     by_id = {n.id: n for n in nodes}
-    remaining = set(by_id)
+    # A dict (not a set) so iteration order is insertion order -- fixed and
+    # reproducible -- rather than hash-seed dependent. Every loop below
+    # draws from ``rng`` while iterating ``remaining``, so a hash-randomized
+    # iteration order would make the *same* seed produce different results
+    # across separate process runs (a set's order depends on PYTHONHASHSEED,
+    # which is randomized per-process by default).
+    remaining: dict[str, None] = dict.fromkeys(n.id for n in nodes)
     # Start from the node with the highest total edge weight (a natural hub,
     # e.g. the living room), with randomized tie-breaking for search diversity.
     weighted_degree = {n: sum(d.get("weight", 1.0) for _, _, d in graph.edges(n, data=True)) for n in remaining}
@@ -87,7 +93,7 @@ def _graph_guided_order(nodes: list[RoomNode], graph: nx.Graph, rng: random.Rand
         if current not in remaining:
             continue
         order.append(by_id[current])
-        remaining.discard(current)
+        del remaining[current]
 
         neighbors = [
             (nbr, graph[current][nbr].get("weight", 1.0))
