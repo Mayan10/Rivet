@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rivet — Generative Floor Plan Engine</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="site">
+    <div class="brand">
+      <div class="mark">R</div>
+      <h1>Rivet</h1>
+      <span class="tag">generative floor plan engine</span>
+    </div>
+    <nav class="links">
+      <a href="https://github.com/Mayan10/Rivet" target="_blank" rel="noopener">GitHub</a>
+      <a href="/api/v1/rules" target="_blank" rel="noopener">Design Rules API</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <h2>Design a floor plan from a room program.</h2>
+    <p>
+      Give Rivet a plot and a list of rooms. It builds an adjacency graph, searches
+      guillotine-cut layouts with simulated annealing against a residential design
+      rulebook, and renders the winning candidates itself — then exports each one
+      to a real, layered DXF file.
+    </p>
+  </section>
+
+  <div class="layout">
+    <div class="panel">
+      <form id="gen-form">
+        <fieldset>
+          <h3>Plot</h3>
+          <div class="field-row">
+            <div>
+              <label for="width">Width (m, east–west)</label>
+              <input type="number" id="width" step="0.1" min="1" value="12" required>
+            </div>
+            <div>
+              <label for="length">Length (m, north–south)</label>
+              <input type="number" id="length" step="0.1" min="1" value="15" required>
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label for="entrance">Entrance faces</label>
+              <select id="entrance">
+                <option value="north" selected>North</option>
+                <option value="south">South</option>
+                <option value="east">East</option>
+                <option value="west">West</option>
+              </select>
+            </div>
+            <div>
+              <label for="candidates">Candidates to generate</label>
+              <input type="number" id="candidates" min="1" max="6" value="3">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <h3>Rooms</h3>
+          <div id="room-rows"></div>
+          <button type="button" class="btn-add" id="add-room">+ Add room</button>
+        </fieldset>
+
+        <button type="submit" class="btn-primary" id="submit-btn">Generate floor plans</button>
+      </form>
+    </div>
+
+    <div>
+      <div id="alerts"></div>
+      <div id="results">
+        <div class="empty-state" id="empty-state">
+          Fill in a plot and room program, then hit <code>Generate floor plans</code>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site">
+    <span>Rivet is an open-source generative floor plan engine. Design guidance is standard
+      residential practice, not a substitute for a licensed engineer's stamped drawings.</span>
+    <a href="https://github.com/Mayan10/Rivet" target="_blank" rel="noopener">Source on GitHub</a>
+  </footer>
+</div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
