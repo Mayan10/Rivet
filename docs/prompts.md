@@ -146,6 +146,52 @@ found.**
 
 ---
 
+## 2a. Phase 0 audit results (2026-08-11) and how it changed the plan
+
+Phase 0 was run against the actual codebase (not the README/architecture
+docs it was written from) and confirmed most of the plan's assumptions, with
+one finding serious enough to reorder the phases below. Full audit is in the
+session history; the parts that change what you should do are:
+
+- **The engine's floor plans are frequently not navigable at all, not just
+  "bedroom reachable through another bedroom."** Reproduced with
+  `plot=12m x 15m`, rooms `[living_room, master_bedroom+ensuite,
+  bedroom:2+ensuite, kitchen, dining_room, bathroom]`, `seed=42` (no
+  corridor/foyer requested, the common case): the living room ends up with
+  a front door and **zero interior doors**; each bedroom has a door to
+  **only its own en-suite**, none to anything else; the plain requested
+  bathroom gets **no door at all**. `openings.place_openings()` only draws
+  a door where a graph edge exists, and the rulebook has no
+  `LIVING_ROOM <-> BEDROOM`/`KITCHEN` preference — only corridor-mediated
+  ones — so without a requested corridor/foyer, most rooms are sealed.
+  This is a functional defect above the "code minimums are unenforced"
+  defect the original plan targeted with Phase 1.
+- **Consequence: circulation (originally Phase 4) now runs before the DXF
+  export overhaul (originally Phase 3).** Producing a beautifully blocked,
+  AIA-layered, mm-accurate DXF of a house nobody can walk through is wasted
+  effort right before the room topology changes shape. The phases below are
+  renumbered accordingly — circulation is now **Phase 3**, DXF export is
+  now **Phase 4**. The service phase numbers (6-12) are unaffected.
+- **The audit corrected one assumption in the original Phase 3 (DXF) brief**:
+  dimensions are already real `DIMENSION` entities with `.render()` already
+  called (not lines-plus-TEXT as assumed), so that specific item is smaller
+  than scoped — see the note inside the phase below. Everything else in
+  that phase (units in meters not mm, no BLOCK/INSERT, no HATCH, no paper
+  space, non-AIA layer names) was confirmed as a real gap.
+- **No automated test currently spans a process boundary.** The existing
+  `test_same_seed_is_deterministic` calls `generate()` twice in the same
+  pytest process, which would not have caught the real cross-process
+  `PYTHONHASHSEED` determinism bug this codebase hit earlier (fixed by
+  swapping a `set()` for an insertion-ordered `dict` in
+  `layout_engine._graph_guided_order`; see `docs/architecture.md`). Phase 1
+  below now explicitly asks for a new subprocess-spanning test rather than
+  just "the determinism test still passes."
+- No disagreement with anything else in this document — rulebook citation
+  requirements, validator shape, metrics contents, and circulation design
+  constraints all matched what the code needed.
+
+---
+
 ## 3. Engine phases
 
 ### Phase 1: split hard constraints from soft scoring
@@ -184,7 +230,17 @@ blog result.
 
 Tests: a layout that violates a minimum must never be returned; the
 infeasible path returns violations; setbacks change correctly with road
-width and height; the determinism test still passes.
+width and height; the existing determinism test still passes.
+
+Also add a NEW test that spans an actual process boundary: run the same
+GenerationRequest + seed through `python -m subprocess` (or
+`multiprocessing` with the `spawn` start method, not `fork`, so it doesn't
+inherit the parent's hash seed) at least twice and assert byte-identical
+output. The current suite only proves determinism within one pytest
+process, which previously missed a real `set()`-iteration-order bug in
+`layout_engine._graph_guided_order` that only showed up across separate
+`python3` invocations. Put this test somewhere it will run for every future
+change to `core/layout_engine.py` and `core/scoring.py`, not just this one.
 ```
 
 ### Phase 2: single source of truth for metrics
@@ -219,64 +275,22 @@ all rooms plus circulation plus wall footprint equal built-up area within a
 stated tolerance; renderers and exporter produce identical numbers.
 ```
 
-### Phase 3: DXF export overhaul
+### Phase 3: circulation
 
 ```
-Read CLAUDE.md. Implement Phase 3 only. Read the ezdxf documentation before
-you start and tell me which version's API you are targeting.
-
-Rewrite `export/dxf.py` so the output is a real CAD deliverable, not layered
-polylines.
-
-1. UNITS. Write coordinates in millimetres. Set $INSUNITS explicitly. Size
-   text heights and DIMSCALE so annotation prints legibly at 1:100. This is
-   the highest priority item: metre-unit output makes the file unusable for
-   every Indian practice.
-2. BLOCKS. Doors, windows, sanitary fixtures, kitchen units, north arrow,
-   and title block become BLOCK definitions placed with INSERT. One
-   definition per type, scaled and rotated per instance. Not inline
-   geometry.
-3. ATTRIBUTES. ATTDEF on the definitions and ATTRIB on each insert carrying
-   tag, type, width, height, and host room, so AutoCAD DATAEXTRACTION can
-   build a schedule from the file.
-4. DIMENSIONS. Real DIMENSION entities with a configured DIMSTYLE, dimension
-   chains as well as overall dimensions. Call ezdxf's render step so the
-   associated geometry block exists, or the dimensions will be invisible in
-   some viewers. Verify this specifically.
-5. HATCH, LINETYPE, LINEWEIGHT. Masonry hatch on cut walls with proper
-   boundary paths. Load every linetype you reference into the LTYPE table.
-   Set per-layer lineweights: heaviest on cut walls, lightest on annotation.
-6. LAYERS. Switch to AIA CAD Layer Guidelines naming (A-WALL-EXTR, A-DOOR,
-   A-GLAZ, A-ANNO-DIMS and so on). Make the layer scheme a named,
-   configurable mapping, keeping the current names available as a legacy
-   scheme.
-7. PAPER SPACE. Add a LAYOUT with a viewport locked at a real scale, the
-   title block as a block with attributes (project, client, date, sheet
-   number, revision), and the legal disclaimer text as a fixed attribute.
-8. SCHEDULES. Emit the door/window schedule and the room area schedule from
-   `LayoutMetrics` as annotation on the sheet. Do not use FIELD entities;
-   they do not recalculate outside AutoCAD.
-
-Tests, all round-trip (export, then re-open with ezdxf and assert):
-expected block definitions exist; INSERT count equals door and window count;
-every wall boundary polyline is closed; layers exist with correct colour and
-lineweight; $INSUNITS is set; dimension geometry blocks were generated;
-layout and viewport exist. Add a golden-file test that fails if the entity
-type census of a fixed reference plan changes.
-
-Do not implement IFC or DWG in this phase.
-```
-
-### Phase 4: circulation
-
-```
-Read CLAUDE.md. Implement Phase 4 only. This is the largest change in the
+Read CLAUDE.md. Implement Phase 3 only. This is the largest change in the
 project. Present your design and wait for my approval before writing code.
 
-Problem: the guillotine slicing tree tiles the buildable rectangle
-completely, so 100% of area is program rooms, there are no corridors or
-foyer, and doors get punched through shared walls. That produces bedrooms
-entered through other bedrooms, and a living room used as a hallway. No
+Problem, confirmed against the actual engine during the Phase 0 audit: the
+guillotine slicing tree tiles the buildable rectangle completely, so 100%
+of area is program rooms, and doors are only placed where the adjacency
+graph has an edge. With no corridor/foyer requested (the common case),
+most rooms end up with NO door to anything but their own en-suite, and a
+plain requested bathroom can end up with no door at all. Reproduced with
+plot 12m x 15m, rooms [living_room, master_bedroom+ensuite, bedroom:2+ensuite,
+kitchen, dining_room, bathroom], seed 42: the living room has a front door
+and zero interior doors. This is worse than "bedroom reachable only through
+another bedroom" — it's frequently "room unreachable, full stop." No
 architect will accept it.
 
 Goal: circulation becomes a first-class element that rooms attach to.
@@ -301,7 +315,61 @@ survives.
 
 Then rewrite `openings.place_openings` so doors open onto circulation by
 default, and add a reachability test asserting the hard constraint above
-across a large randomised set of room programs and seeds.
+across a large randomised set of room programs and seeds -- specifically
+including room programs with no corridor/foyer requested, since that's the
+case that currently fails.
+```
+
+### Phase 4: DXF export overhaul
+
+```
+Read CLAUDE.md. Implement Phase 4 only. Read the ezdxf documentation before
+you start and tell me which version's API you are targeting.
+
+Rewrite `export/dxf.py` so the output is a real CAD deliverable, not layered
+polylines.
+
+1. UNITS. Write coordinates in millimetres. Set $INSUNITS explicitly. Size
+   text heights and DIMSCALE so annotation prints legibly at 1:100. This is
+   the highest priority item: metre-unit output makes the file unusable for
+   every Indian practice.
+2. BLOCKS. Doors, windows, sanitary fixtures, kitchen units, north arrow,
+   and title block become BLOCK definitions placed with INSERT. One
+   definition per type, scaled and rotated per instance. Not inline
+   geometry.
+3. ATTRIBUTES. ATTDEF on the definitions and ATTRIB on each insert carrying
+   tag, type, width, height, and host room, so AutoCAD DATAEXTRACTION can
+   build a schedule from the file.
+4. DIMENSIONS. Audit finding: overall-width and overall-length DIMENSION
+   entities already exist (`export/dxf.py`, `add_linear_dim(...).render()`
+   is already called, so the associated geometry block is already
+   generated -- the "dimensions invisible in some viewers" failure mode
+   this item originally warned about is already avoided). What's still
+   missing: per-room dimension chains, not just the two overall dimensions.
+   Add those, reusing the existing DIMSTYLE, and rescale it for the new
+   millimetre coordinates from item 1.
+5. HATCH, LINETYPE, LINEWEIGHT. Masonry hatch on cut walls with proper
+   boundary paths. Load every linetype you reference into the LTYPE table.
+   Set per-layer lineweights: heaviest on cut walls, lightest on annotation.
+6. LAYERS. Switch to AIA CAD Layer Guidelines naming (A-WALL-EXTR, A-DOOR,
+   A-GLAZ, A-ANNO-DIMS and so on). Make the layer scheme a named,
+   configurable mapping, keeping the current names available as a legacy
+   scheme.
+7. PAPER SPACE. Add a LAYOUT with a viewport locked at a real scale, the
+   title block as a block with attributes (project, client, date, sheet
+   number, revision), and the legal disclaimer text as a fixed attribute.
+8. SCHEDULES. Emit the door/window schedule and the room area schedule from
+   `LayoutMetrics` as annotation on the sheet. Do not use FIELD entities;
+   they do not recalculate outside AutoCAD.
+
+Tests, all round-trip (export, then re-open with ezdxf and assert):
+expected block definitions exist; INSERT count equals door and window count;
+every wall boundary polyline is closed; layers exist with correct colour and
+lineweight; $INSUNITS is set; dimension geometry blocks were generated;
+layout and viewport exist. Add a golden-file test that fails if the entity
+type census of a fixed reference plan changes.
+
+Do not implement IFC or DWG in this phase.
 ```
 
 ### Phase 5: vastu as an optional soft module
@@ -325,8 +393,9 @@ Requirements:
   never confuse "violates NBC" with "violates a vastu preference".
 - Plot north orientation must be an explicit input, not assumed.
 
-Tests: with the module disabled, output is byte-identical to Phase 4 for
-the same seed.
+Tests: with the module disabled, output is byte-identical to Phase 3
+(circulation) for the same seed -- Phase 4 only touched DXF export, so
+Phase 3's output is the correct baseline to diff against here.
 ```
 
 ---
@@ -334,8 +403,9 @@ the same seed.
 ## 4. Service phases
 
 These are specified in full in `docs/saas-buildout.md`. Run them after the
-engine phases, because Phase 4 changes what a saved plan regenerates as, and
-you do not want that happening to customers' stored projects.
+engine phases, because Phase 3 (circulation) changes what a saved plan
+regenerates as, and you do not want that happening to customers' stored
+projects.
 
 For each, use this template:
 
@@ -395,8 +465,8 @@ Deliberately deferred, so Claude Code does not scope-creep into them:
 - IFC export (IfcOpenShell). Real differentiator, much larger job, later
   premium tier.
 - DWG output via ODA File Converter. Check its licence before commercial use.
-- Multi-storey stacking. Depends on Phase 4 landing first, since staircases
-  are circulation.
+- Multi-storey stacking. Depends on Phase 3 (circulation) landing first,
+  since staircases are circulation.
 - Natural language brief parsing via an LLM. Low risk, high polish, but it
   is a service-layer feature and belongs after Phase 8.
 - Learning the scoring weights from architect preference data. Needs data
