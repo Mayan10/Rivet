@@ -458,6 +458,22 @@ costs a rewrite.
    and TNCDBR 2019 documents open while running Phases 1 and 2. Do not let
    Claude Code source clause values from search results.
 
+### Decided (2026-08-12)
+
+1. **Billing: international, USD.** Stripe Checkout + Customer Portal.
+2. **Deploy: AWS.** ECS Fargate + RDS + ElastiCache.
+3. **Jurisdiction: TNCDBR 2019 primary, NBC 2016 Part 3 fallback**, as a
+   named swappable ruleset (`TNCDBR_2019`, `GENERIC`) per Phase 1 point 5.
+
+Still outstanding and specifically blocking Phase 1 point 5 (it cannot be
+implemented with invented numbers, per CLAUDE.md): the actual TNCDBR 2019
+setback table keyed by abutting road width and building height/floor count,
+and citations for the room-minimum values in `core/rules.py::ROOM_RULES`
+that Phase 1 point 2 promotes from soft to hard (living/dining room,
+bedroom, kitchen, bathroom/WC area + width; door widths if TNCDBR differs
+from the current uncited placeholders). Provide clause references or the
+source text before starting Phase 1.
+
 ## 6. Not in scope for these phases
 
 Deliberately deferred, so Claude Code does not scope-creep into them:
