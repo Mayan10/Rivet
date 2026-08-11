@@ -1,0 +1,17 @@
+{
+  "plot": {
+    "width_m": 12.0,
+    "length_m": 15.0,
+    "entrance": "north"
+  },
+  "rooms": [
+    { "room_type": "living_room", "count": 1 },
+    { "room_type": "master_bedroom", "count": 1, "attached_bathroom": true },
+    { "room_type": "bedroom", "count": 2, "attached_bathroom": true },
+    { "room_type": "kitchen", "count": 1 },
+    { "room_type": "dining_room", "count": 1 },
+    { "room_type": "bathroom", "count": 1 }
+  ],
+  "num_candidates": 3,
+  "seed": 42
+}

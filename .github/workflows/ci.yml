@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package (with dev extras)
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Test
+        run: pytest -q --cov=rivet --cov-report=term-missing
+
+      - name: CLI smoke test
+        run: |
+          rivet generate --width 12 --length 15 \
+            --room living_room --room master_bedroom+ensuite \
+            --room bedroom:2+ensuite --room kitchen --room dining_room \
+            --room bathroom --seed 1 --out-dir /tmp/rivet-ci-out
+          test -f /tmp/rivet-ci-out/candidate-1.dxf

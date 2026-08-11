@@ -42,8 +42,8 @@ dev = [
 rivet = "rivet.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/SRILSHUKLA/rivet"
-Issues = "https://github.com/SRILSHUKLA/rivet/issues"
+Homepage = "https://github.com/Mayan10/Rivet"
+Issues = "https://github.com/Mayan10/Rivet/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
