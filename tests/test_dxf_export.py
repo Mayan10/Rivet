@@ -55,7 +55,7 @@ def test_export_dxf_has_expected_layers_and_entity_counts(sample_request, tmp_pa
 def test_export_dxf_bytes_round_trips(sample_request):
     layout = generate(sample_request)[0]
     data = export_dxf_bytes(layout)
-    assert data.startswith(b"  0\r\nSECTION") or data.startswith(b"0\nSECTION") or b"SECTION" in data[:50]
+    assert data.startswith((b"  0\r\nSECTION", b"0\nSECTION")) or b"SECTION" in data[:50]
 
     doc = ezdxf.read(io.StringIO(data.decode("utf-8")))
     assert doc.audit().errors == []

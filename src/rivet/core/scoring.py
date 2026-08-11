@@ -92,13 +92,13 @@ def evaluate(
     for i, a_id in enumerate(ids):
         for b_id in ids[i + 1 :]:
             a, b = node_by_id[a_id], node_by_id[b_id]
-            if is_avoided_adjacency(a.room_type, b.room_type):
-                if shared_wall(rects[a_id], rects[b_id], min_length=MIN_SHARED_WALL_M):
-                    breakdown["adjacency_avoided"] += W_ADJACENCY_AVOIDED
-                    violations.append(
-                        f"{a.label} and {b.label} share a wall but shouldn't "
-                        "(avoided adjacency)."
-                    )
+            if is_avoided_adjacency(a.room_type, b.room_type) and shared_wall(
+                rects[a_id], rects[b_id], min_length=MIN_SHARED_WALL_M
+            ):
+                breakdown["adjacency_avoided"] += W_ADJACENCY_AVOIDED
+                violations.append(
+                    f"{a.label} and {b.label} share a wall but shouldn't (avoided adjacency)."
+                )
 
     # Entrance: the plot-boundary edge the front door sits on should be
     # reachable from an entrance-compatible room (foyer/living/corridor/garage).
@@ -117,7 +117,7 @@ def evaluate(
 
 
 __all__ = [
+    "ADJACENCY_AVOID",
     "ScoreResult",
     "evaluate",
-    "ADJACENCY_AVOID",
 ]

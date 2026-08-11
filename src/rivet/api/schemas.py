@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import base64
 
-from ..core.models import GenerationRequest, Layout, Orientation, PlotSpec, RoomRequirement, RoomType
+from ..core.models import (
+    GenerationRequest,
+    Layout,
+    Orientation,
+    PlotSpec,
+    RoomRequirement,
+    RoomType,
+)
 from ..render.raster import render_png_bytes
 from ..render.svg import render_svg
 
