@@ -47,4 +47,11 @@ temp/
 
 # OS specific
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Rivet
+.venv/
+.rivet_outputs/
+output/
+*.dxf
+ 
