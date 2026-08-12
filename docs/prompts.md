@@ -262,6 +262,33 @@ change to `core/layout_engine.py` and `core/scoring.py`, not just this one.
 
 ### Phase 2: single source of truth for metrics
 
+**Status: done (2026-08-12).** `core/metrics.py` (`compute_metrics`,
+`LayoutMetrics`), `core/walls.py` gained a wall-segment dedup pass
+(`deduplicate_wall_segments`/`total_wall_length_by_class`) since quantity
+takeoff needs each physical wall counted once, not once per room touching
+it. `Layout` gained a `ruleset` field so consumers that only see the
+layout (not the original request) still compute metrics against the right
+ruleset. All four duplicate-computation sites found in the Phase 0 audit
+(raster.py, svg.py, dxf.py, api/schemas.py) now read `LayoutMetrics`
+instead of computing their own `sum(r.rect.area ...)`; the API also
+gained a full `metrics` payload (carpet/built-up/plinth area, circulation
+%, ground coverage, FSI, setback table, door/window schedules, quantity
+takeoff). 102 tests passing (11 new in `test_metrics.py`, including a
+hand-checked exact-value case and an explicit renderer/exporter/API
+consistency check).
+
+One design decision made explicit and recorded in
+`docs/design_rules.md`: the real ventilation ratio (Rule 52(16)(a)) is
+**informational only** -- `core/validator.py` keeps the Phase 1
+has-exterior-wall proxy as its actual hard check, rather than hinging a
+rejection on the uncited window-height assumption the real ratio needs.
+
+Carried forward: window/door/wall height and block-dimension constants
+remain uncited placeholders (flagged in `core/rules.py`, same treatment as
+Phase 1's door widths); Rivet still doesn't model verandah/porch area, so
+plinth area is currently identical to built-up area, not a distinct
+figure.
+
 ```
 Read CLAUDE.md. Implement Phase 2 only.
 

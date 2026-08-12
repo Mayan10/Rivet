@@ -221,6 +221,12 @@ class Layout:
     score: float = 0.0
     score_breakdown: dict[str, float] = field(default_factory=dict)
     violations: list[str] = field(default_factory=list)
+    # Which ruleset this layout was generated/validated against -- carried
+    # on the layout itself (not just the originating GenerationRequest) so
+    # downstream consumers (renderers, exporter, API) that only see the
+    # Layout can still call core.metrics.compute_metrics against the
+    # correct ruleset instead of silently defaulting to TNCDBR_2019.
+    ruleset: Ruleset = Ruleset.TNCDBR_2019
 
     def room(self, room_id: str) -> RoomInstance:
         for r in self.rooms:

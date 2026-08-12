@@ -34,6 +34,11 @@ the room program you give it.
 - **Ranked candidates, not one answer** — each request returns several
   distinct high-scoring layouts with a transparent score breakdown, so you
   can see *why* one beat another.
+- **Real quantity metrics, computed once** — carpet/built-up/plinth area,
+  ground coverage, FSI consumed vs. the cited TNCDBR cap, a setback
+  compliance table, door/window schedules, and a wall-length/plaster/
+  block-count takeoff, all from one `core/metrics.py` that every renderer,
+  the DXF exporter, and the API read — not recomputed four different ways.
 - **Self-rendering** — PNG and SVG renderers draw the generated geometry
   directly (walls, door swings, window breaks, dimensions, north arrow,
   title block). No external imagery anywhere in the path.

@@ -15,6 +15,7 @@ import ezdxf
 from ezdxf.document import Drawing
 from ezdxf.enums import TextEntityAlignment
 
+from ..core.metrics import compute_metrics
 from ..core.models import Layout, Opening
 from ..core.rules import WALL_THICKNESS_EXTERNAL_M, WALL_THICKNESS_INTERNAL_M
 from ..core.walls import WallSegment, compute_wall_segments
@@ -112,6 +113,7 @@ def _configure_dimstyle(doc: Drawing) -> None:
 
 
 def build_document(layout: Layout) -> Drawing:
+    metrics = compute_metrics(layout, layout.ruleset)
     doc = ezdxf.new(dxfversion="R2010", setup=True)
     doc.header["$INSUNITS"] = 6  # meters
     _configure_dimstyle(doc)
@@ -174,10 +176,9 @@ def build_document(layout: Layout) -> Drawing:
     )
     dim_l.render()
 
-    total_area = sum(r.rect.area for r in layout.rooms)
     msp.add_text(
         f"Rivet generated floor plan | {layout.candidate_id} | "
-        f"score {layout.score}/100 | {total_area:.1f} m2 gross",
+        f"score {layout.score}/100 | {metrics.gross_area_sqm:.1f} m2 gross",
         dxfattribs={"layer": LAYER_TEXT, "height": 0.35},
     ).set_placement((0, plot.length_m + 1.2), align=TextEntityAlignment.LEFT)
 

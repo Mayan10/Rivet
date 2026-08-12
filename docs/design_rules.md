@@ -88,11 +88,91 @@ before the *scorer* penalizes it — always soft, never code-derived.
 
 Rule 52(16)(a): minimum aggregate window/ventilator opening area must be
 at least **1/8 of floor area** (25% more for kitchens). `core/validator.py`
-currently checks a simpler proxy — does the room have an exterior wall at
-all — not the real area ratio; the full ratio calculation is planned for
-`core/metrics.py` (`docs/prompts.md` Phase 2), which is why this line
-item is listed as "hard" above but with an explicit caveat in its
-`Violation.source` string.
+still checks only the simpler proxy — does the room have an exterior wall
+at all — **not** the real area ratio, even though `core/metrics.py` (added
+in Phase 2) now computes that ratio. This is deliberate, not an oversight:
+computing a real opening *area* needs an assumed window *height* that
+TNCDBR doesn't specify anywhere (the only place TNCDBR gives a direct area
+figure is the bath/WC minimum — 0.5 m² — which needs no height assumption
+at all). Hinging a hard rejection on an invented height would violate the
+same principle this rulebook exists to enforce, just one level removed —
+so the real ratio is reported as **informational metrics only**
+(`RoomMetric.ventilation_passes` etc., surfaced through every renderer/
+exporter/API consumer), and the validator's hard check stays the Phase 1
+proxy. See "Metrics and quantity takeoff" below.
+
+Note the interaction with the room table above: `DINING_ROOM` is
+"habitable" (gets a ventilation figure computed) but has
+`exterior_wall_required=False` in its `RoomRule` — so a dining room that
+doesn't happen to land on an exterior wall will legitimately report
+`ventilation_passes=False` with zero window area. That's an honest
+reflection of the current rulebook's living/dining-as-one-zone design
+choice, not a bug in the metric.
+
+## Metrics and quantity takeoff (`core/metrics.py`, Phase 2)
+
+Single source of truth for every geometry-derived number — before this
+module, renderers, the DXF exporter, and the API each computed
+`sum(r.rect.area for r in layout.rooms)` (and similar) independently.
+`Layout.ruleset` records which ruleset a layout was generated against, so
+downstream consumers compute metrics against the right one.
+
+**Cited** (traceable to TNCDBR 2019):
+- Ventilation ratio (Rule 52(16)(a)) — see above for why it's
+  informational, not a hard check.
+- **FSI cap = 2.0** (Rule 35(1)(a)/(b), row D — both the ≤16-dwelling and
+  >16-dwelling "Other areas" tables cite the same figure for the
+  residential case Rivet generates). `core/rules.py::fsi_permitted()`
+  returns `None` for the `GENERIC` ruleset, which has no cited cap.
+
+**Uncited assumptions** (`core/rules.py`, all explicitly flagged as
+placeholders, none used to reject a layout):
+- `WINDOW_HEIGHT_M` (1.20 m) and `DOOR_HEIGHT_M` (2.10 m) — needed to turn
+  an opening's width into an area.
+- `WALL_HEIGHT_M` (3.0 m) — floor-to-ceiling height for plaster/wall-area
+  takeoff.
+- `BLOCK_LENGTH_M` / `BLOCK_HEIGHT_M` / `MORTAR_JOINT_M` /
+  `BLOCK_COUNT_WASTAGE_FACTOR` — a common Indian standard concrete block
+  size and a +5% wastage allowance for the block-count estimate.
+
+**Carpet vs. built-up vs. plinth area** — three genuinely different
+numbers, not synonyms:
+- *Carpet area*: each room's rect inset by half the thickness of whichever
+  wall (external 0.23m or internal 0.115m) bounds each of its four edges.
+  Net usable floor area.
+- *Built-up area*: the buildable rect (bounded at the external wall
+  *centerline*) expanded outward by half the external wall thickness on
+  every side — area within the *outer face* of the external wall.
+- *Plinth area*: currently equal to built-up area. Rivet doesn't model
+  verandahs/porches (plinth-only projections beyond the building line)
+  yet, so there's nothing to add on top of built-up — not an
+  approximation so much as "nothing else exists in scope."
+
+These three don't reconcile to an exact identity via simple wall-length x
+thickness arithmetic for a real multi-room layout — each interior
+T-junction double-counts a thickness² sliver slightly differently between
+the per-room carpet inset and the running-length wall footprint
+approximation. Measured at ~0.2% of built-up area for a 10-room layout;
+`tests/test_metrics.py` asserts conservation within a deliberately
+generous 1% bound, and additionally proves an *exact* match (to floating-
+point precision) for the corner-simple single-room case where this effect
+vanishes.
+
+**Setback compliance table**: reports required vs. provided per face
+(front/rear/left/right). Since `buildable` is always derived directly from
+`setbacks_for()`, provided always exactly equals required today — an
+honest reflection of the current architecture, not a bug; it'll become a
+real check once something (e.g. a future asymmetric-placement feature)
+can position a building within its buildable envelope rather than filling
+it exactly.
+
+**Quantity takeoff** relies on `core/walls.py::deduplicate_wall_segments`
+/ `total_wall_length_by_class`: `compute_wall_segments()` deliberately
+double-counts a shared interior wall (once per room, harmless for
+rendering — two overlapping lines draw as one), which would double the
+block count on every interior wall if used directly for a takeoff. The
+dedup pass merges coincident/overlapping per-room segments into their true
+unique runs first.
 
 ## Construction standards
 

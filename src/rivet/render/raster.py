@@ -8,6 +8,7 @@ import io
 
 from PIL import Image, ImageDraw, ImageFont
 
+from ..core.metrics import LayoutMetrics, compute_metrics
 from ..core.models import Layout
 from ..core.rules import WALL_THICKNESS_EXTERNAL_M, WALL_THICKNESS_INTERNAL_M
 from ..core.walls import compute_wall_segments
@@ -82,15 +83,16 @@ def _draw_north_arrow(draw: ImageDraw.ImageDraw, tr: _Transform, layout: Layout,
     draw.text((cx, cy + r + 6), "N", fill=TEXT_RGB, font=font, anchor="ma")
 
 
-def _draw_title_block(draw: ImageDraw.ImageDraw, plan_height_px: int, layout: Layout, font, font_small):
+def _draw_title_block(
+    draw: ImageDraw.ImageDraw, plan_height_px: int, layout: Layout, metrics: LayoutMetrics, font, font_small
+):
     x0, y0 = 20, plan_height_px + 10
     x1, y1 = 20 + 320, plan_height_px + TITLE_BLOCK_PX - 10
     draw.rectangle([x0, y0, x1, y1], outline=TEXT_RGB, width=1)
     draw.text((x0 + 10, y0 + 8), "Rivet — Generated Floor Plan", fill=TEXT_RGB, font=font)
-    total_area = sum(r.rect.area for r in layout.rooms)
     draw.text(
         (x0 + 10, y0 + 30),
-        f"{layout.candidate_id}  |  score {layout.score}/100  |  {total_area:.1f} m² gross",
+        f"{layout.candidate_id}  |  score {layout.score}/100  |  {metrics.gross_area_sqm:.1f} m² gross",
         fill=DIMENSION_RGB,
         font=font_small,
     )
@@ -98,6 +100,7 @@ def _draw_title_block(draw: ImageDraw.ImageDraw, plan_height_px: int, layout: La
 
 
 def render_png(layout: Layout, px_per_m: float = PX_PER_M) -> Image.Image:
+    metrics = compute_metrics(layout, layout.ruleset)
     plot = layout.plot
     width_px = int(plot.width_m * px_per_m) + 2 * MARGIN_PX
     plan_height_px = int(plot.length_m * px_per_m) + 2 * MARGIN_PX
@@ -160,7 +163,7 @@ def render_png(layout: Layout, px_per_m: float = PX_PER_M) -> Image.Image:
 
     _draw_dimensions(draw, tr, layout, font_dim)
     _draw_north_arrow(draw, tr, layout, font_dim)
-    _draw_title_block(draw, plan_height_px, layout, font_title, font_small_label)
+    _draw_title_block(draw, plan_height_px, layout, metrics, font_title, font_small_label)
 
     return img
 

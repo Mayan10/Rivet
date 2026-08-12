@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import svgwrite
 
+from ..core.metrics import compute_metrics
 from ..core.models import Layout
 from ..core.rules import WALL_THICKNESS_EXTERNAL_M, WALL_THICKNESS_INTERNAL_M
 from ..core.walls import compute_wall_segments
@@ -30,6 +31,7 @@ class _Transform:
 
 
 def render_svg(layout: Layout, px_per_m: float = PX_PER_M) -> str:
+    metrics = compute_metrics(layout, layout.ruleset)
     plot = layout.plot
     width_px = plot.width_m * px_per_m + 2 * MARGIN_PX
     plan_height_px = plot.length_m * px_per_m + 2 * MARGIN_PX
@@ -164,10 +166,9 @@ def render_svg(layout: Layout, px_per_m: float = PX_PER_M) -> str:
             font_size="15px",
         )
     )
-    total_area = sum(r.rect.area for r in layout.rooms)
     title_g.add(
         dwg.text(
-            f"{layout.candidate_id} | score {layout.score}/100 | {total_area:.1f} m² gross",
+            f"{layout.candidate_id} | score {layout.score}/100 | {metrics.gross_area_sqm:.1f} m² gross",
             insert=(tb_x + 10, tb_y + 38),
             fill=rgb_to_hex(DIMENSION_RGB),
             font_size="11px",

@@ -56,6 +56,7 @@ def _build_layout(candidate_id, sr, nodes, buildable, request, graph) -> Layout:
         score=sr.result.score,
         score_breakdown=sr.result.breakdown,
         violations=sr.result.violations,
+        ruleset=request.ruleset,
     )
 
 

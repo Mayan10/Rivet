@@ -182,11 +182,19 @@ WALL_THICKNESS_INTERNAL_M = 0.115  # ~4.5in half-brick partition
 DOOR_WIDTH_MAIN_M = 1.00  # uncited placeholder
 DOOR_WIDTH_INTERNAL_M = 0.90  # uncited placeholder
 DOOR_WIDTH_BATH_M = 0.75  # uncited placeholder
-DOOR_HEIGHT_M = 2.10  # not drawn in plan view, kept for DXF text/metadata
+DOOR_HEIGHT_M = 2.10  # uncited placeholder -- not drawn in plan view, DXF/metrics metadata only
 
 WINDOW_WIDTH_HABITABLE_M = 1.20  # uncited placeholder
 WINDOW_WIDTH_KITCHEN_M = 0.90  # uncited placeholder
-WINDOW_SILL_HEIGHT_M = 0.90  # not drawn in plan view, kept for metadata
+WINDOW_SILL_HEIGHT_M = 0.90  # uncited placeholder -- not drawn in plan view, metadata only
+# TNCDBR 2019, Rule 52(16)(a) cites an opening *area* requirement but never
+# specifies a window height to derive one from (the only place TNCDBR gives
+# a direct area figure is the bath/WC minimum, 0.5 sqm, which needs no
+# height assumption at all). This is the same category of gap as door
+# widths above: used only by core/metrics.py's informational ventilation
+# ratio (Phase 2), never to reject a layout in core/validator.py. See
+# docs/regulatory_sources.md "Gaps".
+WINDOW_HEIGHT_M = 1.20  # uncited placeholder
 
 # TNCDBR 2019, Rule 42(i): minimum width of corridor/verandah within
 # residential buildings is 1.0m.
@@ -195,12 +203,36 @@ MIN_OPENING_EDGE_CLEARANCE_M = 0.30  # keep door/window off the exact corner
 
 # TNCDBR 2019, Rule 52(16)(a): minimum aggregate opening area (windows/
 # ventilators, excluding doors) shall not be less than one-eighth of the
-# floor area, increased by 25% for kitchens. Not yet enforced anywhere
-# (Phase 1 keeps the existing has-exterior-wall boolean check) -- recorded
-# here for Phase 2 (core/metrics.py), which computes it as a real ratio.
+# floor area, increased by 25% for kitchens. This rule itself IS cited; what
+# core/metrics.py computes from it (Phase 2) is informational only, not a
+# hard rejection -- see WINDOW_HEIGHT_M above for why, and CLAUDE.md's rule
+# against inventing the *inputs* to an otherwise-cited constraint.
+# core/validator.py keeps the Phase 1 has-exterior-wall proxy as its actual
+# hard check.
 VENTILATION_OPENING_RATIO = 1.0 / 8.0
 VENTILATION_OPENING_RATIO_KITCHEN_MULTIPLIER = 1.25
 VENTILATION_CITATION = "TNCDBR 2019, Rule 52(16)(a)"
+
+# ---------------------------------------------------------------------------
+# Quantity takeoff constants (core/metrics.py)
+# ---------------------------------------------------------------------------
+# None of these are cited -- they're standard-practice assumptions needed to
+# turn wall running length into a plaster area and a block count estimate.
+# Named here, in one place, exactly so nobody has to go hunting through
+# core/metrics.py for a magic number when one of these turns out to be wrong
+# for a given project.
+
+WALL_HEIGHT_M = 3.0  # uncited placeholder -- floor-to-floor height for plaster/wall-area takeoff
+PLASTER_FACES_EXTERNAL = 2  # outer face + inner face
+PLASTER_FACES_INTERNAL = 2  # both rooms' faces
+
+# A common Indian standard concrete block size (length x height x
+# thickness); uncited -- actual block choice is a construction-phase
+# decision, not a code requirement.
+BLOCK_LENGTH_M = 0.400
+BLOCK_HEIGHT_M = 0.200
+MORTAR_JOINT_M = 0.010  # added to each block face when estimating coursing
+BLOCK_COUNT_WASTAGE_FACTOR = 1.05  # +5% for cuts, breakage, corners
 
 
 def door_width_for(room_type: RoomType) -> float:
@@ -225,6 +257,21 @@ class Setbacks:
     front_m: float
     rear_m: float
     side_m: float
+
+
+# TNCDBR 2019, Rule 35(1)(a)/(b), row D: "Maximum FSI 2.0" -- both the
+# <=16-dwelling and >16-dwelling "Other areas" tables cite the same figure
+# for the residential case Rivet generates. Used by core/metrics.py for the
+# FSI-consumed-vs-permitted figure (Phase 2); GENERIC has no cited FSI cap.
+TNCDBR_MAX_FSI = 2.0
+TNCDBR_MAX_FSI_CITATION = "TNCDBR 2019, Rule 35(1)(a)/(b), row D"
+
+
+def fsi_permitted(ruleset: Ruleset) -> float | None:
+    """Maximum permitted Floor Space Index, or None if the ruleset doesn't
+    cite one (GENERIC).
+    """
+    return TNCDBR_MAX_FSI if ruleset == Ruleset.TNCDBR_2019 else None
 
 
 # --- TNCDBR 2019, Rule 35(1)(a): Non High Rise buildings, <=16 dwellings,

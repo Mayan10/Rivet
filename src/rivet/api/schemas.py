@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 
+from ..core.metrics import LayoutMetrics, compute_metrics
 from ..core.models import (
     GenerationRequest,
     InfeasibleResult,
@@ -122,13 +123,77 @@ def parse_generation_request(payload: object) -> GenerationRequest:
         raise RequestValidationError(str(exc)) from exc
 
 
+def _setback_to_dict(s) -> dict:
+    return {"face": s.face, "required_m": round(s.required_m, 3), "provided_m": round(s.provided_m, 3), "compliant": s.compliant}
+
+
+def _opening_row_to_dict(row) -> dict:
+    return {
+        "tag": row.tag,
+        "kind": row.kind,
+        "width_m": row.width_m,
+        "height_m": row.height_m,
+        "count": row.count,
+        "total_area_sqm": round(row.total_area_sqm, 2),
+    }
+
+
+def metrics_to_dict(metrics: LayoutMetrics) -> dict:
+    return {
+        "gross_area_sqm": round(metrics.gross_area_sqm, 2),
+        "total_carpet_area_sqm": round(metrics.total_carpet_area_sqm, 2),
+        "total_built_up_area_sqm": round(metrics.total_built_up_area_sqm, 2),
+        "total_plinth_area_sqm": round(metrics.total_plinth_area_sqm, 2),
+        "circulation_area_sqm": round(metrics.circulation_area_sqm, 2),
+        "circulation_pct_of_built_up": round(metrics.circulation_pct_of_built_up, 1),
+        "ground_coverage_pct": round(metrics.ground_coverage_pct, 1),
+        "fsi_consumed": round(metrics.fsi_consumed, 3),
+        "fsi_permitted": metrics.fsi_permitted,
+        "fsi_permitted_citation": metrics.fsi_permitted_citation,
+        "setbacks": [_setback_to_dict(s) for s in metrics.setbacks],
+        "door_schedule": [_opening_row_to_dict(r) for r in metrics.door_schedule],
+        "window_schedule": [_opening_row_to_dict(r) for r in metrics.window_schedule],
+        "quantity_takeoff": {
+            "exterior_wall_length_m": round(metrics.quantity_takeoff.exterior_wall_length_m, 2),
+            "interior_wall_length_m": round(metrics.quantity_takeoff.interior_wall_length_m, 2),
+            "plaster_area_sqm": round(metrics.quantity_takeoff.plaster_area_sqm, 2),
+            "block_count_estimate": metrics.quantity_takeoff.block_count_estimate,
+            "floor_finish_area_by_room_sqm": {
+                k: round(v, 2) for k, v in metrics.quantity_takeoff.floor_finish_area_by_room_sqm.items()
+            },
+        },
+        "rooms": [
+            {
+                "room_id": r.room_id,
+                "is_habitable": r.is_habitable,
+                "carpet_area_sqm": round(r.carpet_area_sqm, 2),
+                "window_opening_area_sqm": (
+                    round(r.window_opening_area_sqm, 2) if r.window_opening_area_sqm is not None else None
+                ),
+                "required_ventilation_area_sqm": (
+                    round(r.required_ventilation_area_sqm, 2) if r.required_ventilation_area_sqm is not None else None
+                ),
+                "ventilation_ratio_actual": (
+                    round(r.ventilation_ratio_actual, 3) if r.ventilation_ratio_actual is not None else None
+                ),
+                "ventilation_passes": r.ventilation_passes,
+            }
+            for r in metrics.rooms
+        ],
+    }
+
+
 def layout_to_dict(layout: Layout, *, dxf_url: str | None = None) -> dict:
+    metrics = compute_metrics(layout, layout.ruleset)
+    carpet_by_room = {r.room_id: r.carpet_area_sqm for r in metrics.rooms}
+
     return {
         "candidate_id": layout.candidate_id,
         "score": layout.score,
         "score_breakdown": layout.score_breakdown,
         "violations": layout.violations,
-        "gross_area_sqm": round(sum(r.rect.area for r in layout.rooms), 2),
+        "gross_area_sqm": round(metrics.gross_area_sqm, 2),
+        "metrics": metrics_to_dict(metrics),
         "rooms": [
             {
                 "id": r.id,
@@ -139,6 +204,7 @@ def layout_to_dict(layout: Layout, *, dxf_url: str | None = None) -> dict:
                 "width": round(r.rect.w, 3),
                 "height": round(r.rect.h, 3),
                 "area_sqm": round(r.rect.area, 2),
+                "carpet_area_sqm": round(carpet_by_room[r.id], 2),
             }
             for r in layout.rooms
         ],
