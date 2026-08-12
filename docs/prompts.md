@@ -196,6 +196,23 @@ session history; the parts that change what you should do are:
 
 ### Phase 1: split hard constraints from soft scoring
 
+**Status: done (2026-08-12).** `core/validator.py`, cited `TNCDBR_2019`
+ruleset, `Ruleset`/`InfeasibleResult` end-to-end through CLI and API,
+cross-process determinism test. 91 tests passing. Carried forward, not
+done in this phase:
+
+- Door widths remain uncited and unenforced (see
+  `docs/regulatory_sources.md` "Gaps") -- needed before Phase 4 (DXF
+  export) can size door BLOCK definitions off anything but a placeholder.
+- The web UI form doesn't expose `ruleset`/road-width/height inputs yet
+  (CLI and API do); `app.js` only handles the new infeasible-result
+  response shape without crashing.
+- TNCDBR's 14 post-2019 amendment G.O.s still haven't been checked
+  against Rule 35/52 -- the cited values are from the unamended base text.
+- The exterior-window-access hard check is a has-exterior-wall proxy, not
+  the real Rule 52(16)(a) 1/8-of-floor-area ratio -- that's Phase 2
+  (metrics) work.
+
 ```
 Read CLAUDE.md. Implement Phase 1 only.
 
