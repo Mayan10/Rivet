@@ -9,6 +9,8 @@ PNG/SVG, and exports DXF. It is being turned into a subscription product.
 - `docs/design_rules.md`
 - `docs/saas-buildout.md`
 - `docs/prompts.md`
+- `docs/regulatory_sources.md` — cited TNCDBR 2019 values ready to use in
+  the Phase 1 rulebook rewrite; also lists what's still unsourced
 
 ## Hard boundaries
 

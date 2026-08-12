@@ -465,14 +465,19 @@ costs a rewrite.
 3. **Jurisdiction: TNCDBR 2019 primary, NBC 2016 Part 3 fallback**, as a
    named swappable ruleset (`TNCDBR_2019`, `GENERIC`) per Phase 1 point 5.
 
-Still outstanding and specifically blocking Phase 1 point 5 (it cannot be
-implemented with invented numbers, per CLAUDE.md): the actual TNCDBR 2019
-setback table keyed by abutting road width and building height/floor count,
-and citations for the room-minimum values in `core/rules.py::ROOM_RULES`
-that Phase 1 point 2 promotes from soft to hard (living/dining room,
-bedroom, kitchen, bathroom/WC area + width; door widths if TNCDBR differs
-from the current uncited placeholders). Provide clause references or the
-source text before starting Phase 1.
+**Setback table and room minimums: sourced.** Extracted directly from the
+official TNCDBR 2019 base text (Rule 35 for setbacks, Rule 52 for room
+minimums) and written up with exact citations in
+[`docs/regulatory_sources.md`](regulatory_sources.md) — read that before
+starting Phase 1, it has the values ready to transcribe into
+`core/rules.py`.
+
+Still outstanding, per that document's "Gaps" section: door widths (not in
+TNCDBR's general residential rules — need an NBC 2016 citation or a
+deliberate practice value), the NBC 2016 Part 3 extract for the `GENERIC`
+fallback ruleset, and a check of whether any of TNCDBR's 14 amendment
+G.O.s (most recent Oct 2025) touch Rule 35 or Rule 52 — the sourced values
+are from the unamended 2019 base text only.
 
 ## 6. Not in scope for these phases
 
