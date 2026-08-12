@@ -14,8 +14,16 @@ import pathlib
 import sys
 
 from .core.generator import generate
-from .core.models import GenerationRequest, Orientation, PlotSpec, RoomRequirement, RoomType
-from .core.rules import ROOM_RULES, validate_request
+from .core.models import (
+    GenerationRequest,
+    InfeasibleResult,
+    Orientation,
+    PlotSpec,
+    RoomRequirement,
+    RoomType,
+    Ruleset,
+)
+from .core.rules import room_rules_for, validate_request
 from .export.dxf import export_dxf
 from .render.raster import render_png
 from .render.svg import render_svg
@@ -77,8 +85,29 @@ def _build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--seed", type=int, default=None, help="Random seed for reproducible output")
     gen.add_argument("--out-dir", default="output", help="Directory to write rendered files into")
     gen.add_argument("--formats", default="png,svg,dxf", help="Comma-separated: png,svg,dxf")
+    gen.add_argument(
+        "--ruleset",
+        choices=[r.value for r in Ruleset],
+        default=Ruleset.TNCDBR_2019.value,
+        help="Which building-code ruleset to validate/score against",
+    )
+    gen.add_argument("--floors", type=int, default=1, help="Number of floors (used to estimate height if --height omitted)")
+    gen.add_argument(
+        "--road-width",
+        type=float,
+        default=None,
+        help="Abutting road width in meters (TNCDBR_2019 setback input; assumed if omitted)",
+    )
+    gen.add_argument(
+        "--height",
+        type=float,
+        default=None,
+        help="Proposed building height in meters (TNCDBR_2019 setback input; estimated from --floors if omitted)",
+    )
 
-    sub.add_parser("rules", help="Print the design rulebook as JSON")
+    rules_cmd = sub.add_parser("rules", help="Print the design rulebook as JSON")
+    rules_cmd.add_argument("--ruleset", choices=[r.value for r in Ruleset], default=Ruleset.TNCDBR_2019.value)
+
     sub.add_parser("room-types", help="List valid room type identifiers")
 
     return parser
@@ -86,17 +115,40 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _run_generate(args: argparse.Namespace) -> int:
     room_reqs = [_parse_room_spec(s) for s in args.rooms]
-    plot = PlotSpec(width_m=args.width, length_m=args.length, entrance=Orientation(args.entrance))
+    ruleset = Ruleset(args.ruleset)
+    plot = PlotSpec(
+        width_m=args.width,
+        length_m=args.length,
+        entrance=Orientation(args.entrance),
+        num_floors=args.floors,
+        abutting_road_width_m=args.road_width,
+        proposed_height_m=args.height,
+    )
 
     issues = validate_request(
-        plot.width_m, plot.length_m, [(r.room_type, r.count, r.target_area_sqm) for r in room_reqs]
+        plot.width_m,
+        plot.length_m,
+        [(r.room_type, r.count, r.target_area_sqm) for r in room_reqs],
+        ruleset=ruleset,
+        road_width_m=plot.abutting_road_width_m,
+        height_m=plot.proposed_height_m,
+        num_floors=plot.num_floors,
     )
     for issue in issues:
         print(f"[warning] {issue}", file=sys.stderr)
 
-    request = GenerationRequest(plot=plot, rooms=room_reqs, num_candidates=args.candidates, seed=args.seed)
-    layouts = generate(request)
+    request = GenerationRequest(
+        plot=plot, rooms=room_reqs, num_candidates=args.candidates, seed=args.seed, ruleset=ruleset
+    )
+    result = generate(request)
 
+    if isinstance(result, InfeasibleResult):
+        print(f"INFEASIBLE: {result.message}", file=sys.stderr)
+        for v in result.hardest_violations:
+            print(f"   - [{v.constraint_id}] {v.message} ({v.source})", file=sys.stderr)
+        return 1
+
+    layouts = result
     out_dir = pathlib.Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     formats = {f.strip().lower() for f in args.formats.split(",") if f.strip()}
@@ -105,7 +157,7 @@ def _run_generate(args: argparse.Namespace) -> int:
         base = out_dir / layout.candidate_id
         status = f"{layout.candidate_id}: score {layout.score}/100"
         if layout.violations:
-            status += f" -- {len(layout.violations)} issue(s)"
+            status += f" -- {len(layout.violations)} soft note(s)"
         print(status)
         for v in layout.violations:
             print(f"   - {v}")
@@ -121,10 +173,11 @@ def _run_generate(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_rules() -> int:
+def _run_rules(args: argparse.Namespace) -> int:
+    ruleset = Ruleset(args.ruleset)
     payload = {
         room_type.value: dataclasses.asdict(rule)
-        for room_type, rule in ROOM_RULES.items()
+        for room_type, rule in room_rules_for(ruleset).items()
     }
     print(json.dumps(payload, indent=2))
     return 0
@@ -141,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "generate":
         return _run_generate(args)
     if args.command == "rules":
-        return _run_rules()
+        return _run_rules(args)
     if args.command == "room-types":
         return _run_room_types()
     return 1  # pragma: no cover - argparse enforces valid subcommands

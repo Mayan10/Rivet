@@ -6,11 +6,13 @@ import base64
 
 from ..core.models import (
     GenerationRequest,
+    InfeasibleResult,
     Layout,
     Orientation,
     PlotSpec,
     RoomRequirement,
     RoomType,
+    Ruleset,
 )
 from ..render.raster import render_png_bytes
 from ..render.svg import render_svg
@@ -42,7 +44,25 @@ def parse_generation_request(payload: object) -> GenerationRequest:
         raise RequestValidationError(f"'plot.entrance' must be one of: {valid}") from exc
 
     try:
-        plot = PlotSpec(width_m=width_m, length_m=length_m, entrance=entrance)
+        num_floors = int(plot_payload.get("num_floors", 1))
+        road_width_raw = plot_payload.get("abutting_road_width_m")
+        road_width_m = float(road_width_raw) if road_width_raw is not None else None
+        height_raw = plot_payload.get("proposed_height_m")
+        height_m = float(height_raw) if height_raw is not None else None
+    except (TypeError, ValueError) as exc:
+        raise RequestValidationError(
+            "'plot.num_floors', 'plot.abutting_road_width_m', and 'plot.proposed_height_m' must be numbers"
+        ) from exc
+
+    try:
+        plot = PlotSpec(
+            width_m=width_m,
+            length_m=length_m,
+            entrance=entrance,
+            num_floors=num_floors,
+            abutting_road_width_m=road_width_m,
+            proposed_height_m=height_m,
+        )
     except ValueError as exc:
         raise RequestValidationError(str(exc)) from exc
 
@@ -87,8 +107,17 @@ def parse_generation_request(payload: object) -> GenerationRequest:
     except (TypeError, ValueError) as exc:
         raise RequestValidationError("'seed' must be an integer") from exc
 
+    ruleset_str = payload.get("ruleset", Ruleset.TNCDBR_2019.value)
     try:
-        return GenerationRequest(plot=plot, rooms=rooms, num_candidates=num_candidates, seed=seed)
+        ruleset = Ruleset(str(ruleset_str).lower())
+    except ValueError as exc:
+        valid = ", ".join(r.value for r in Ruleset)
+        raise RequestValidationError(f"'ruleset' must be one of: {valid}") from exc
+
+    try:
+        return GenerationRequest(
+            plot=plot, rooms=rooms, num_candidates=num_candidates, seed=seed, ruleset=ruleset
+        )
     except ValueError as exc:
         raise RequestValidationError(str(exc)) from exc
 
@@ -128,4 +157,22 @@ def layout_to_dict(layout: Layout, *, dxf_url: str | None = None) -> dict:
         "svg": render_svg(layout),
         "png_base64": base64.b64encode(render_png_bytes(layout)).decode("ascii"),
         "dxf_url": dxf_url,
+    }
+
+
+def infeasible_to_dict(result: InfeasibleResult) -> dict:
+    return {
+        "message": result.message,
+        "violations": [
+            {
+                "constraint_id": v.constraint_id,
+                "severity": v.severity,
+                "room_id": v.room_id,
+                "message": v.message,
+                "actual": v.actual,
+                "required": v.required,
+                "source": v.source,
+            }
+            for v in result.hardest_violations
+        ],
     }

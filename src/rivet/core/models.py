@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .validator import Violation
 
 
 class RoomType(str, Enum):
@@ -35,6 +39,16 @@ class Orientation(str, Enum):
     WEST = "west"
 
 
+class Ruleset(str, Enum):
+    """Which building-code ruleset core/rules.py validates and scores
+    against. Lives here (not in rules.py) so both PlotSpec/GenerationRequest
+    and rules.py can reference it without a circular import.
+    """
+
+    TNCDBR_2019 = "tncdbr_2019"
+    GENERIC = "generic"
+
+
 # Rooms that need daylight/ventilation and therefore a plot-boundary wall.
 HABITABLE_ROOM_TYPES = frozenset(
     {
@@ -54,18 +68,33 @@ SERVICE_ROOM_TYPES = frozenset({RoomType.CORRIDOR, RoomType.STAIRCASE})
 
 @dataclass(frozen=True)
 class PlotSpec:
-    """The buildable land parcel."""
+    """The buildable land parcel.
+
+    ``abutting_road_width_m`` and ``proposed_height_m`` are optional inputs
+    to the TNCDBR_2019 ruleset's setback table (Rule 35, keyed by road
+    width and building height, not plot area). When omitted,
+    ``core/rules.py`` falls back to documented, non-cited assumptions
+    (``ASSUMED_ROAD_WIDTH_M``, ``num_floors * ASSUMED_FLOOR_HEIGHT_M``) --
+    supply the real values whenever they're known, since they change which
+    setback tier applies.
+    """
 
     width_m: float
     length_m: float
     entrance: Orientation = Orientation.NORTH
     num_floors: int = 1
+    abutting_road_width_m: float | None = None
+    proposed_height_m: float | None = None
 
     def __post_init__(self) -> None:
         if self.width_m <= 0 or self.length_m <= 0:
             raise ValueError("Plot dimensions must be positive")
         if self.num_floors < 1:
             raise ValueError("num_floors must be >= 1")
+        if self.abutting_road_width_m is not None and self.abutting_road_width_m <= 0:
+            raise ValueError("abutting_road_width_m must be positive")
+        if self.proposed_height_m is not None and self.proposed_height_m <= 0:
+            raise ValueError("proposed_height_m must be positive")
 
     @property
     def area_sqm(self) -> float:
@@ -95,6 +124,7 @@ class GenerationRequest:
     rooms: list[RoomRequirement]
     num_candidates: int = 3
     seed: int | None = None
+    ruleset: Ruleset = Ruleset.TNCDBR_2019
 
     def __post_init__(self) -> None:
         if not self.rooms:
@@ -197,3 +227,19 @@ class Layout:
             if r.id == room_id:
                 return r
         raise KeyError(room_id)
+
+
+@dataclass
+class InfeasibleResult:
+    """Returned by ``core.generator.generate`` instead of layouts when
+    every searched candidate fails hard validation (see
+    ``core/validator.py``). Callers (CLI, API) must check for this
+    explicitly -- ``generate`` never silently returns a code-violating
+    layout, and it never raises for this case either, so an infeasible
+    request is a real, explainable outcome rather than an exception a
+    caller has to remember to catch.
+    """
+
+    request: GenerationRequest
+    hardest_violations: list[Violation]  # the closest-to-passing candidate's violations
+    message: str

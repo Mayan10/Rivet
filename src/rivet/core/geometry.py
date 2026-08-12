@@ -8,6 +8,11 @@ from dataclasses import dataclass
 
 from .models import Orientation, Rect
 
+# Below this, two rects "touching" isn't a usable doorway -- shared by the
+# scorer (soft: penalizes a missed preferred adjacency) and the validator
+# (hard: rejects a cited avoided adjacency that's nonetheless realized).
+MIN_USABLE_SHARED_WALL_M = 1.0
+
 
 @dataclass(frozen=True)
 class SharedWall:

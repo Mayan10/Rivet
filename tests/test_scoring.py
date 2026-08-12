@@ -8,41 +8,23 @@ PLOT = PlotSpec(width_m=10.0, length_m=10.0, entrance=Orientation.NORTH)
 BUILDABLE = Rect(x=1.0, y=1.0, w=8.0, h=8.0)
 
 
-def _node(id_, room_type, area, min_width, aspect=2.2, exterior=False, ensuite_of=None):
+def _node(id_, room_type, area, aspect=2.2, exterior=False, ensuite_of=None):
     return RoomNode(
         id=id_,
         room_type=room_type,
         label=id_,
         target_area_sqm=area,
-        min_width_m=min_width,
         max_aspect_ratio=aspect,
         exterior_wall_required=exterior,
         ensuite_of=ensuite_of,
     )
 
 
-def test_min_width_violation_is_penalized():
-    from rivet.core.models import RoomType
-
-    node = _node("bedroom_1", RoomType.BEDROOM, area=10.0, min_width=2.4)
-    wide_enough = {"bedroom_1": Rect(1, 1, 4.0, 2.5)}
-    too_narrow = {"bedroom_1": Rect(1, 1, 1.0, 10.0)}
-    graph = nx.Graph()
-    graph.add_node("bedroom_1", data=node)
-
-    good = evaluate([node], wide_enough, BUILDABLE, PLOT, graph)
-    bad = evaluate([node], too_narrow, BUILDABLE, PLOT, graph)
-
-    assert good.breakdown["min_width"] == 0.0
-    assert bad.breakdown["min_width"] > 0.0
-    assert bad.score < good.score
-
-
 def test_avoided_adjacency_is_penalized_even_without_a_graph_edge():
     from rivet.core.models import RoomType
 
-    kitchen = _node("kitchen_1", RoomType.KITCHEN, area=6.0, min_width=1.8)
-    bathroom = _node("bathroom_1", RoomType.BATHROOM, area=3.0, min_width=1.2)
+    kitchen = _node("kitchen_1", RoomType.KITCHEN, area=6.0)
+    bathroom = _node("bathroom_1", RoomType.BATHROOM, area=3.0)
     graph = nx.Graph()
     graph.add_node("kitchen_1", data=kitchen)
     graph.add_node("bathroom_1", data=bathroom)  # deliberately no edge
@@ -61,10 +43,10 @@ def test_avoided_adjacency_is_penalized_even_without_a_graph_edge():
 def test_required_edge_penalized_more_than_preferred_when_both_missed():
     from rivet.core.models import RoomType
 
-    bedroom = _node("bedroom_1", RoomType.BEDROOM, area=10.0, min_width=2.4)
-    ensuite = _node("bath_1", RoomType.BATHROOM, area=3.0, min_width=1.2, ensuite_of="bedroom_1")
-    kitchen = _node("kitchen_1", RoomType.KITCHEN, area=6.0, min_width=1.8)
-    dining = _node("dining_1", RoomType.DINING_ROOM, area=7.0, min_width=2.0)
+    bedroom = _node("bedroom_1", RoomType.BEDROOM, area=10.0)
+    ensuite = _node("bath_1", RoomType.BATHROOM, area=3.0, ensuite_of="bedroom_1")
+    kitchen = _node("kitchen_1", RoomType.KITCHEN, area=6.0)
+    dining = _node("dining_1", RoomType.DINING_ROOM, area=7.0)
 
     required_graph = nx.Graph()
     required_graph.add_edge("bedroom_1", "bath_1", weight=2.0, required=True)
@@ -89,10 +71,10 @@ def test_scoring_ranks_a_good_layout_above_a_bad_one():
     """
     from rivet.core.models import RoomType
 
-    bedroom = _node("bedroom_1", RoomType.BEDROOM, area=10.0, min_width=2.4)
-    ensuite = _node("bath_1", RoomType.BATHROOM, area=3.0, min_width=1.2, ensuite_of="bedroom_1")
-    kitchen = _node("kitchen_1", RoomType.KITCHEN, area=6.0, min_width=1.8)
-    bathroom = _node("bathroom_2", RoomType.BATHROOM, area=3.0, min_width=1.2)
+    bedroom = _node("bedroom_1", RoomType.BEDROOM, area=10.0)
+    ensuite = _node("bath_1", RoomType.BATHROOM, area=3.0, ensuite_of="bedroom_1")
+    kitchen = _node("kitchen_1", RoomType.KITCHEN, area=6.0)
+    bathroom = _node("bathroom_2", RoomType.BATHROOM, area=3.0)
     nodes = [bedroom, ensuite, kitchen, bathroom]
 
     graph = nx.Graph()

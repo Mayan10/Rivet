@@ -16,11 +16,16 @@ from flask import Blueprint, current_app, jsonify, request, send_file
 
 from .. import __version__
 from ..core.generator import generate
-from ..core.models import RoomType
-from ..core.rules import ROOM_RULES
+from ..core.models import InfeasibleResult, RoomType, Ruleset
+from ..core.rules import room_rules_for
 from ..core.rules import validate_request as validate_rulebook
 from ..export.dxf import export_dxf
-from .schemas import RequestValidationError, layout_to_dict, parse_generation_request
+from .schemas import (
+    RequestValidationError,
+    infeasible_to_dict,
+    layout_to_dict,
+    parse_generation_request,
+)
 
 api_bp = Blueprint("api", __name__, url_prefix="/api/v1")
 download_bp = Blueprint("download", __name__)
@@ -40,7 +45,15 @@ def room_types():
 
 @api_bp.get("/rules")
 def rules():
-    return jsonify({room_type.value: dataclasses.asdict(rule) for room_type, rule in ROOM_RULES.items()})
+    ruleset_str = request.args.get("ruleset", Ruleset.TNCDBR_2019.value)
+    try:
+        ruleset = Ruleset(ruleset_str.lower())
+    except ValueError:
+        valid = ", ".join(r.value for r in Ruleset)
+        return jsonify({"error": f"'ruleset' must be one of: {valid}"}), 400
+    return jsonify(
+        {room_type.value: dataclasses.asdict(rule) for room_type, rule in room_rules_for(ruleset).items()}
+    )
 
 
 @api_bp.post("/generate")
@@ -58,18 +71,25 @@ def generate_endpoint():
         gen_request.plot.width_m,
         gen_request.plot.length_m,
         [(r.room_type, r.count, r.target_area_sqm) for r in gen_request.rooms],
+        ruleset=gen_request.ruleset,
+        road_width_m=gen_request.plot.abutting_road_width_m,
+        height_m=gen_request.plot.proposed_height_m,
+        num_floors=gen_request.plot.num_floors,
     )
 
     try:
-        layouts = generate(gen_request)
+        result = generate(gen_request)
     except ValueError as exc:
         return jsonify({"error": str(exc), "warnings": warnings}), 422
+
+    if isinstance(result, InfeasibleResult):
+        return jsonify({"warnings": warnings, "infeasible": infeasible_to_dict(result)}), 422
 
     output_dir = Path(current_app.config["RIVET_OUTPUT_DIR"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
     candidates = []
-    for layout in layouts:
+    for layout in result:
         token = uuid.uuid4().hex
         export_dxf(layout, str(output_dir / f"{token}.dxf"))
         candidates.append(layout_to_dict(layout, dxf_url=f"/download/{token}.dxf"))

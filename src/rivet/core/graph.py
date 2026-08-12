@@ -10,8 +10,8 @@ from dataclasses import dataclass
 
 import networkx as nx
 
-from .models import RoomRequirement, RoomType
-from .rules import is_avoided_adjacency, is_preferred_adjacency, rule_for
+from .models import RoomRequirement, RoomType, Ruleset
+from .rules import DEFAULT_RULESET, is_avoided_adjacency, is_preferred_adjacency, rule_for
 
 # Room types eligible to receive an auto-generated attached bathroom.
 _CAN_HAVE_ENSUITE = frozenset({RoomType.MASTER_BEDROOM, RoomType.BEDROOM})
@@ -19,13 +19,21 @@ _CAN_HAVE_ENSUITE = frozenset({RoomType.MASTER_BEDROOM, RoomType.BEDROOM})
 
 @dataclass
 class RoomNode:
-    """A single room instance to be placed, before it has geometry."""
+    """A single room instance to be placed, before it has geometry.
+
+    Note: there's no ``min_width_m`` here. Room minimums are a hard
+    constraint enforced by ``core/validator.py`` against the final
+    geometry (and, for kitchens, depend on whether a dining room is also
+    in the request) -- they're not a soft target the search steers toward,
+    so they don't belong on the search's per-node state. See
+    ``core/scoring.py`` for what *is* still a soft, search-guiding target
+    (``target_area_sqm``, ``max_aspect_ratio``).
+    """
 
     id: str
     room_type: RoomType
     label: str
     target_area_sqm: float
-    min_width_m: float
     max_aspect_ratio: float
     exterior_wall_required: bool
     ensuite_of: str | None = None  # id of the bedroom this bathroom serves
@@ -35,7 +43,9 @@ def _default_label(room_type: RoomType) -> str:
     return room_type.value.replace("_", " ").title()
 
 
-def expand_room_requirements(rooms: list[RoomRequirement]) -> list[RoomNode]:
+def expand_room_requirements(
+    rooms: list[RoomRequirement], ruleset: Ruleset = DEFAULT_RULESET
+) -> list[RoomNode]:
     """Turn user-facing (type, count) requirements into concrete room nodes,
     auto-creating en-suite bathrooms where requested.
     """
@@ -48,7 +58,7 @@ def expand_room_requirements(rooms: list[RoomRequirement]) -> list[RoomNode]:
         return f"{room_type.value}_{idx}", idx
 
     for req in rooms:
-        rule = rule_for(req.room_type)
+        rule = rule_for(req.room_type, ruleset)
         area = req.target_area_sqm if req.target_area_sqm is not None else rule.default_area_sqm
         for _ in range(req.count):
             node_id, idx = _next_id(req.room_type)
@@ -60,14 +70,13 @@ def expand_room_requirements(rooms: list[RoomRequirement]) -> list[RoomNode]:
                     room_type=req.room_type,
                     label=label,
                     target_area_sqm=area,
-                    min_width_m=rule.min_width_m,
                     max_aspect_ratio=rule.max_aspect_ratio,
                     exterior_wall_required=rule.exterior_wall_required,
                 )
             )
 
             if req.attached_bathroom and req.room_type in _CAN_HAVE_ENSUITE:
-                bath_rule = rule_for(RoomType.BATHROOM)
+                bath_rule = rule_for(RoomType.BATHROOM, ruleset)
                 bath_id, _ = _next_id(RoomType.BATHROOM)
                 nodes.append(
                     RoomNode(
@@ -75,7 +84,6 @@ def expand_room_requirements(rooms: list[RoomRequirement]) -> list[RoomNode]:
                         room_type=RoomType.BATHROOM,
                         label=f"{label} Ensuite",
                         target_area_sqm=bath_rule.default_area_sqm,
-                        min_width_m=bath_rule.min_width_m,
                         max_aspect_ratio=bath_rule.max_aspect_ratio,
                         exterior_wall_required=False,
                         ensuite_of=node_id,

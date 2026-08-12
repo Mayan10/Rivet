@@ -167,7 +167,14 @@
       const data = await res.json();
 
       if (!res.ok) {
-        showAlert(data.error || "Generation failed.");
+        if (data.infeasible) {
+          const items = data.infeasible.violations
+            .map((v) => `${v.message} <span style="opacity:.7">(${v.source})</span>`)
+            .join("<br>");
+          showAlert(`${data.infeasible.message}<br>${items}`);
+        } else {
+          showAlert(data.error || "Generation failed.");
+        }
         return;
       }
 
