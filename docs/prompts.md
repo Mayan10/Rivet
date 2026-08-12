@@ -321,6 +321,56 @@ stated tolerance; renderers and exporter produce identical numbers.
 
 ### Phase 3: circulation
 
+**Status: done (2026-08-12).** Chosen approach: circulation as a
+first-class element woven directly into the slicing-tree recursion
+(`layout_engine.build_circulation_layout`), not a pre-reserved spine or a
+post-search carve — see the design discussion this session for the
+tradeoffs against the other two options. Three explicit decisions made and
+confirmed before writing code: a spine is *always* generated (never
+conditional on room count), an explicitly-requested `CORRIDOR`/`FOYER`
+room becomes an extra named room alongside the auto-spine rather than
+replacing it, and full branching support was built now rather than a
+single-spine MVP. `core/validator.py` gained the hard reachability check
+(BFS over the actual door graph from the entrance); `tests/test_reachability.py`
+stress-tests it (73 cases: 3 room programs x 2 plot sizes x 4 entrance
+orientations x 3 seeds, none requesting an explicit `CORRIDOR`, the exact
+scenario the original bug was found in) plus one concrete always-feasible
+positive case. 175 tests passing.
+
+Construction alone (the monotonic top-down corridor-insertion rule)
+guarantees connectivity, but three real bugs surfaced only once the
+validator's reachability check went in and started rejecting its own
+output — worth recording since none were hypothetical:
+
+1. **Ensuite-pair splitting could cost either the bedroom or its ensuite
+   exterior access** (an earlier version split along the corridor-facing
+   axis to steer the bedroom toward the corridor, which reliably gave up
+   the *other* end of that axis). Fixed by forcing the same cut axis at
+   every recursion depth (`layout_engine._slice_tree_forced_axis`), so a
+   room retains the full span of whichever dimension isn't being cut, all
+   the way down.
+2. **A room's corridor-facing wall could be shorter than any door needs**:
+   the splitter divided a wing's stacking axis proportionally by target
+   area, and a small-target room (e.g. a standalone bathroom) could get
+   squeezed under the door-fit minimum — reproducible even on generously
+   sized plots, not just tight ones. Fixed with a hard floor
+   (`rules.min_door_clear_wall_m`, per room type since a bathroom's own
+   door needs less clearance than an internal door) enforced at every
+   split in the circulation splitter.
+3. **Two supporting fixes the above exposed**: `geometry.shared_wall`'s
+   `min_length` comparison had no floating-point tolerance, so a wall cut
+   to *exactly* the floor value could fail the check by a few ULPs; and
+   `openings._place_corridor_doors`'s junction opening (where two corridor
+   segments meet) reused the room-door helper, which subtracts corner
+   clearance from both ends of a width that's already sized to the *whole*
+   wall — always failing to fit. Both fixed; see `core/geometry.py` and
+   `core/openings.py`.
+
+Carried forward: circulation area is checked against Rule 42(i)'s 1.0m
+minimum width only by construction (`CIRCULATION_CORRIDOR_WIDTH_M` builds
+at 1.20m, comfortably above it); the 10-15% built-up-area target band is
+soft/uncited, an engineering choice not a code figure.
+
 ```
 Read CLAUDE.md. Implement Phase 3 only. This is the largest change in the
 project. Present your design and wait for my approval before writing code.

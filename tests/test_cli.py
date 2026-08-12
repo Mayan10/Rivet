@@ -11,9 +11,9 @@ def test_generate_writes_files_and_returns_zero(tmp_path, capsys):
         [
             "generate",
             "--width",
-            "12",
+            "15",
             "--length",
-            "11",
+            "13",
             "--road-width",
             "9",
             "--height",

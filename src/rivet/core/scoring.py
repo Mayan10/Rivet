@@ -26,7 +26,13 @@ import networkx as nx
 from .geometry import MIN_USABLE_SHARED_WALL_M, entrance_edge, room_touches_edge, shared_wall
 from .graph import RoomNode
 from .models import PlotSpec, Rect
-from .rules import ADJACENCY_AVOID, ENTRANCE_COMPATIBLE_ROOMS, is_avoided_adjacency
+from .rules import (
+    ADJACENCY_AVOID,
+    CIRCULATION_TARGET_PCT_MAX,
+    CIRCULATION_TARGET_PCT_MIN,
+    ENTRANCE_COMPATIBLE_ROOMS,
+    is_avoided_adjacency,
+)
 
 # Penalty weights. These are tuned so that a single serious soft issue
 # dominates many small ones, while still letting simulated annealing find
@@ -37,6 +43,7 @@ W_ASPECT_RATIO = 18.0
 W_ADJACENCY_MISSED = 10.0
 W_ADJACENCY_AVOIDED = 55.0
 W_ENTRANCE = 14.0
+W_CIRCULATION = 6.0
 
 
 @dataclass
@@ -53,6 +60,7 @@ def evaluate(
     buildable: Rect,
     plot: PlotSpec,
     graph: nx.Graph,
+    corridor_ids: frozenset[str] = frozenset(),
 ) -> ScoreResult:
     breakdown = {
         "area_error": 0.0,
@@ -60,6 +68,7 @@ def evaluate(
         "adjacency_missed": 0.0,
         "adjacency_avoided": 0.0,
         "entrance": 0.0,
+        "circulation": 0.0,
     }
     violations: list[str] = []
 
@@ -82,8 +91,11 @@ def evaluate(
     # Avoided adjacencies: penalize even though we never add a graph edge for
     # them, since the slicing search could still place them side by side by
     # chance. Includes the cited (hard) pairs too -- see module docstring.
+    # Only real rooms participate -- `rects` also carries circulation
+    # segments (Phase 3), which aren't in `nodes` and have no room_type to
+    # check an avoided-adjacency rule against.
     node_by_id = {n.id: n for n in nodes}
-    ids = list(rects.keys())
+    ids = [n.id for n in nodes]
     for i, a_id in enumerate(ids):
         for b_id in ids[i + 1 :]:
             a, b = node_by_id[a_id], node_by_id[b_id]
@@ -97,6 +109,12 @@ def evaluate(
 
     # Entrance: the plot-boundary edge the front door sits on should be
     # reachable from an entrance-compatible room (foyer/living/corridor/garage).
+    # Since Phase 3, the entrance edge is usually the root circulation
+    # segment itself (the whole point of tying its axis to plot.entrance) --
+    # `edge_rooms` only inspects real rooms, so a corridor-only entrance
+    # wall leaves it empty and this check is silently satisfied, which is
+    # the best case, not a gap: a corridor at the door is strictly better
+    # than a foyer/living room there.
     edge = entrance_edge(plot.entrance)
     edge_rooms = [n for n in nodes if room_touches_edge(rects[n.id], buildable, edge)]
     if edge_rooms and not any(n.room_type in ENTRANCE_COMPATIBLE_ROOMS for n in edge_rooms):
@@ -105,6 +123,19 @@ def evaluate(
             f"The {plot.entrance.value} entrance wall opens directly into "
             f"{', '.join(n.label for n in edge_rooms)} instead of a foyer/living space."
         )
+
+    # Circulation: soft target band as a % of buildable area -- a proxy for
+    # built-up area that's good enough to guide the search; core/metrics.py
+    # computes the real built-up-area-based figure for reporting (Phase 2).
+    if corridor_ids:
+        circulation_area = sum(rects[cid].area for cid in corridor_ids if cid in rects)
+        circulation_pct = (circulation_area / buildable.area * 100) if buildable.area > 0 else 0.0
+        if circulation_pct < CIRCULATION_TARGET_PCT_MIN:
+            deficit = (CIRCULATION_TARGET_PCT_MIN - circulation_pct) / CIRCULATION_TARGET_PCT_MIN
+            breakdown["circulation"] += W_CIRCULATION * deficit
+        elif circulation_pct > CIRCULATION_TARGET_PCT_MAX:
+            excess = (circulation_pct - CIRCULATION_TARGET_PCT_MAX) / CIRCULATION_TARGET_PCT_MAX
+            breakdown["circulation"] += W_CIRCULATION * excess
 
     penalty = sum(breakdown.values())
     score = round(max(0.0, 100.0 - penalty), 1)

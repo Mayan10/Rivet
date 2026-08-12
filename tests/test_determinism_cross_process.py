@@ -29,7 +29,10 @@ from rivet.core.models import GenerationRequest, Orientation, PlotSpec, RoomRequ
 from rivet.core.generator import generate
 
 request = GenerationRequest(
-    plot=PlotSpec(width_m=12.0, length_m=11.0, entrance=Orientation.NORTH),
+    plot=PlotSpec(
+        width_m=15.0, length_m=13.0, entrance=Orientation.NORTH,
+        abutting_road_width_m=9.0, proposed_height_m=6.0,
+    ),
     rooms=[
         RoomRequirement(RoomType.LIVING_ROOM, count=1),
         RoomRequirement(RoomType.MASTER_BEDROOM, count=1, attached_bathroom=True),

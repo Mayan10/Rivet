@@ -13,11 +13,28 @@ search algorithm about validity.
 from __future__ import annotations
 
 from .graph import build_adjacency_graph, expand_room_requirements
-from .layout_engine import search_layouts
-from .models import GenerationRequest, InfeasibleResult, Layout, Rect, RoomInstance
+from .layout_engine import SearchResult, search_layouts
+from .models import GenerationRequest, InfeasibleResult, Layout, Rect, RoomInstance, RoomType
 from .openings import place_openings
 from .rules import setbacks_for
 from .validator import ValidationResult, validate_layout
+
+
+def _corridor_room_instances(sr: SearchResult) -> list[RoomInstance]:
+    # Sort by numeric suffix, not lexicographically ("circulation_10"
+    # should sort after "circulation_9", not between "circulation_1" and
+    # "circulation_2").
+    ordered = sorted(sr.corridor_ids, key=lambda cid: int(cid.rsplit("_", 1)[1]))
+    single = len(ordered) == 1
+    return [
+        RoomInstance(
+            id=cid,
+            room_type=RoomType.CORRIDOR,
+            label="Corridor" if single else f"Corridor {i}",
+            rect=sr.rects[cid],
+        )
+        for i, cid in enumerate(ordered, start=1)
+    ]
 
 
 def compute_buildable_rect(request: GenerationRequest) -> Rect:
@@ -46,7 +63,8 @@ def _build_layout(candidate_id, sr, nodes, buildable, request, graph) -> Layout:
         RoomInstance(id=n.id, room_type=n.room_type, label=n.label, rect=sr.rects[n.id])
         for n in nodes
     ]
-    openings = place_openings(nodes, sr.rects, buildable, request.plot, graph)
+    rooms.extend(_corridor_room_instances(sr))
+    openings = place_openings(nodes, sr.rects, buildable, request.plot, graph, corridor_ids=sr.corridor_ids)
     return Layout(
         candidate_id=candidate_id,
         plot=request.plot,

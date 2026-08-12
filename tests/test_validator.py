@@ -29,7 +29,14 @@ def test_valid_layout_has_no_violations():
             rect=Rect(buildable.x, buildable.y, buildable.w, buildable.h),
         )
     ]
-    result = validate_layout(_layout(rooms, plot), Ruleset.TNCDBR_2019)
+    layout = _layout(rooms, plot)
+    # A hand-built fixture has no doors by construction (the real generator
+    # always places one) -- give it a main door so this test exercises the
+    # dimension/adjacency/setback checks it's meant to, not reachability.
+    layout.openings = [
+        Opening(kind="main_door", x=buildable.x, y=buildable.y, width=1.0, axis="horizontal", room_id="living_room_1")
+    ]
+    result = validate_layout(layout, Ruleset.TNCDBR_2019)
     assert result.is_valid
     assert result.violations == []
 
@@ -124,6 +131,9 @@ def test_generic_ruleset_uses_its_own_uncited_minimums():
     plot = _plot()
     rooms = [RoomInstance(id="bedroom_1", room_type=RoomType.BEDROOM, label="Bedroom", rect=Rect(0, 0, 2.5, 3.0))]
     layout = _layout(rooms, plot)  # 7.5 sqm
+    # See test_valid_layout_has_no_violations: a fully-valid assertion needs
+    # a main door, since a hand-built fixture has none by default.
+    layout.openings = [Opening(kind="main_door", x=0, y=0, width=1.0, axis="horizontal", room_id="bedroom_1")]
 
     tncdbr_result = validate_layout(layout, Ruleset.TNCDBR_2019)
     generic_result = validate_layout(layout, Ruleset.GENERIC)

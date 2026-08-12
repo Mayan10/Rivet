@@ -10,6 +10,7 @@ area-error-from-target, entrance placement) stay in ``core/scoring.py``.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 
 from .geometry import MIN_USABLE_SHARED_WALL_M, on_boundary, shared_wall
@@ -23,6 +24,12 @@ from .rules import (
     setbacks_for,
 )
 
+_REACHABILITY_CITATION = (
+    "Phase 3 design (docs/prompts.md 'Approach A'): construction already "
+    "guarantees every room connects to circulation (core/layout_engine.py's "
+    "forced-axis splitting), so this is a belt-and-suspenders check against "
+    "the actual door graph rather than trusting geometry alone."
+)
 _EXTERIOR_ACCESS_CITATION = (
     "TNCDBR 2019, Rule 52(16)(a) [ventilation opening required; this check is a "
     "has-exterior-wall proxy -- the real 1/8-of-floor-area opening ratio is "
@@ -190,6 +197,63 @@ def _setback_violations(layout: Layout, ruleset: Ruleset) -> list[Violation]:
     ]
 
 
+def _reachability_violations(layout: Layout) -> list[Violation]:
+    """Every room must be reachable from the entrance by walking through
+    doors -- never trapped behind another room with no door of its own.
+
+    This walks the *actual* door graph (``layout.openings``), not the
+    desired-adjacency graph used to seed generation, so it catches any
+    discrepancy between what the layout engine intended and what
+    ``openings.py`` actually placed.
+    """
+    adjacency: dict[str, set[str]] = {room.id: set() for room in layout.rooms}
+    for opening in layout.openings:
+        if opening.connects_to is None:
+            continue
+        if opening.room_id in adjacency:
+            adjacency[opening.room_id].add(opening.connects_to)
+        if opening.connects_to in adjacency:
+            adjacency[opening.connects_to].add(opening.room_id)
+
+    main_doors = [o for o in layout.openings if o.kind == "main_door"]
+    if not main_doors:
+        return [
+            Violation(
+                constraint_id="reachability",
+                severity="error",
+                room_id=None,
+                message="No main entrance door was placed; the layout has no connection to the outside.",
+                actual=None,
+                required=None,
+                source=_REACHABILITY_CITATION,
+            )
+        ]
+
+    entry_id = main_doors[0].room_id
+    reachable = {entry_id}
+    queue = deque([entry_id])
+    while queue:
+        current = queue.popleft()
+        for neighbor in adjacency.get(current, ()):
+            if neighbor not in reachable:
+                reachable.add(neighbor)
+                queue.append(neighbor)
+
+    return [
+        Violation(
+            constraint_id="reachability",
+            severity="error",
+            room_id=room.id,
+            message=f"{room.label} is not reachable from the entrance through any door.",
+            actual=None,
+            required=None,
+            source=_REACHABILITY_CITATION,
+        )
+        for room in layout.rooms
+        if room.id not in reachable
+    ]
+
+
 def validate_layout(layout: Layout, ruleset: Ruleset = Ruleset.TNCDBR_2019) -> ValidationResult:
     """Run every hard constraint against a fully-formed layout.
 
@@ -203,4 +267,5 @@ def validate_layout(layout: Layout, ruleset: Ruleset = Ruleset.TNCDBR_2019) -> V
     violations.extend(_dimension_violations(layout, ruleset))
     violations.extend(_hard_adjacency_violations(layout))
     violations.extend(_setback_violations(layout, ruleset))
+    violations.extend(_reachability_violations(layout))
     return ValidationResult(violations=violations)

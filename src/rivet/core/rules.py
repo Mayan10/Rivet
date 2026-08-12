@@ -86,8 +86,11 @@ _TNCDBR_2019_ROOM_RULES: dict[RoomType, RoomRule] = {
     # checking whether the layout also has a DINING_ROOM.
     RoomType.KITCHEN: RoomRule(5.0, 1.8, 8.0, 2.4, True, "TNCDBR 2019, Rule 52(6)(b)"),
     RoomType.DINING_ROOM: RoomRule(7.5, 2.4, 10.0, 2.0, False, _HABITABLE_ROOM_CITATION),
-    RoomType.BATHROOM: RoomRule(1.4, 1.0, 3.5, 2.2, False, "TNCDBR 2019, Rule 52(7)(b)"),
-    RoomType.TOILET: RoomRule(1.0, 0.9, 1.8, 2.2, False, "TNCDBR 2019, Rule 52(7)(b)"),
+    # max_aspect_ratio 4.0 (not 2.2 like habitable rooms): a narrow ensuite
+    # bathroom running alongside its bedroom -- e.g. 1.2m x 3.5m -- is
+    # completely normal, not a quality defect. Soft target, not cited.
+    RoomType.BATHROOM: RoomRule(1.4, 1.0, 3.5, 4.0, False, "TNCDBR 2019, Rule 52(7)(b)"),
+    RoomType.TOILET: RoomRule(1.0, 0.9, 1.8, 4.0, False, "TNCDBR 2019, Rule 52(7)(b)"),
     RoomType.GARAGE: RoomRule(18.0, 3.0, 18.0, 2.2, False, "TNCDBR 2019, Rule 52(10)(a) [private garage, 3.0m x 6.0m min]"),
     RoomType.STORE: RoomRule(3.0, 1.2, 3.0, 2.2, False, "TNCDBR 2019, Rule 52(9) [store room, no cited min width]"),
     # Not covered by a specific TNCDBR Rule 52 sub-clause found so far --
@@ -111,8 +114,8 @@ _GENERIC_ROOM_RULES: dict[RoomType, RoomRule] = {
     RoomType.BEDROOM: RoomRule(9.5, 2.4, 11.0, 2.0, True, "uncited placeholder"),
     RoomType.KITCHEN: RoomRule(5.0, 1.8, 8.0, 2.4, True, "uncited placeholder"),
     RoomType.DINING_ROOM: RoomRule(7.5, 2.4, 10.0, 2.0, False, "uncited placeholder"),
-    RoomType.BATHROOM: RoomRule(2.2, 1.2, 3.5, 2.2, False, "uncited placeholder"),
-    RoomType.TOILET: RoomRule(1.5, 0.9, 1.8, 2.2, False, "uncited placeholder"),
+    RoomType.BATHROOM: RoomRule(2.2, 1.2, 3.5, 4.0, False, "uncited placeholder"),
+    RoomType.TOILET: RoomRule(1.5, 0.9, 1.8, 4.0, False, "uncited placeholder"),
     RoomType.STUDY: RoomRule(6.5, 2.1, 9.0, 2.0, True, "uncited placeholder"),
     RoomType.GARAGE: RoomRule(15.0, 2.7, 18.0, 2.2, False, "uncited placeholder"),
     RoomType.STORE: RoomRule(2.0, 1.2, 3.0, 2.2, False, "uncited placeholder"),
@@ -201,6 +204,41 @@ WINDOW_HEIGHT_M = 1.20  # uncited placeholder
 CORRIDOR_MIN_WIDTH_M = 1.00
 MIN_OPENING_EDGE_CLEARANCE_M = 0.30  # keep door/window off the exact corner
 
+# ---------------------------------------------------------------------------
+# Circulation (core/layout_engine.py's circulation-aware room splitter,
+# docs/prompts.md Phase 3)
+# ---------------------------------------------------------------------------
+# None of these are cited -- CORRIDOR_MIN_WIDTH_M above (Rule 42(i)) is the
+# only cited figure circulation geometry has to respect. Everything below is
+# an engineering/design choice for how the auto-generated corridor behaves.
+
+# Built corridor width: comfortably above the cited 1.0m minimum, not a
+# separate citation.
+CIRCULATION_CORRIDOR_WIDTH_M = 1.20
+
+# Max "primary" rooms (an en-suite bathroom doesn't count separately -- it
+# nests with its bedroom) a single corridor-bordering cluster may hold
+# before the recursive splitter inserts another corridor branch instead of
+# placing them directly. Keeps every leaf cluster small enough that a
+# forced-axis placement (every room in the cluster touching the corridor)
+# stays a sensible floor plan rather than a very deep sliver of a room.
+CIRCULATION_SINGLE_LOAD_THRESHOLD = 3
+
+# Soft-scoring target band for circulation as a percentage of built-up
+# area -- deviation outside this band is a scoring penalty, never a hard
+# rejection (only CORRIDOR_MIN_WIDTH_M is hard, and the corridor-width
+# construction above always satisfies it by construction).
+CIRCULATION_TARGET_PCT_MIN = 10.0
+CIRCULATION_TARGET_PCT_MAX = 15.0
+
+# Shortest wall segment that could *conceivably* host any door, once corner
+# clearances (MIN_OPENING_EDGE_CLEARANCE_M) are subtracted on both sides --
+# the smallest per-type requirement (a bathroom door), not a cited code
+# value. core/openings.py uses it only as a cheap first-pass filter before
+# the precise per-room-type check in min_door_clear_wall_m() below decides
+# whether a specific door actually fits.
+MIN_DOOR_CLEAR_WALL_M = 1.20
+
 # TNCDBR 2019, Rule 52(16)(a): minimum aggregate opening area (windows/
 # ventilators, excluding doors) shall not be less than one-eighth of the
 # floor area, increased by 25% for kitchens. This rule itself IS cited; what
@@ -239,6 +277,19 @@ def door_width_for(room_type: RoomType) -> float:
     if room_type in (RoomType.BATHROOM, RoomType.TOILET):
         return DOOR_WIDTH_BATH_M
     return DOOR_WIDTH_INTERNAL_M
+
+
+def min_door_clear_wall_m(room_type: RoomType) -> float:
+    """Shortest wall this room type's own door actually needs, once corner
+    clearances are subtracted on both sides -- e.g. a 0.9m internal door
+    needs 0.9 + 2*0.3 = 1.5m of clear wall, not the flat 1.2m
+    MIN_DOOR_CLEAR_WALL_M used to (that value only covers the narrower
+    bathroom door and undercounted every other room type).
+    core/layout_engine.py's circulation splitter uses this as a hard floor
+    on each room's stacking-axis span, so no room is ever cut thinner than
+    what its own door needs to fit.
+    """
+    return door_width_for(room_type) + 2 * MIN_OPENING_EDGE_CLEARANCE_M
 
 
 def window_width_for(room_type: RoomType) -> float:

@@ -41,6 +41,7 @@ splitting it across two modules:
 | Exterior window access (habitable rooms) | **Hard** | validator, proxy for Rule 52(16)(a) — see below |
 | Bathroom/toilet not opening onto kitchen | **Hard** | validator, cited (Rule 52(7)(c)(vi)) |
 | Setback compliance | **Hard** | validator (defensive check — buildable area is derived from setbacks by construction) |
+| Every room reachable from the entrance | **Hard** | validator (Phase 3, belt-and-suspenders — see "Circulation" below) |
 | Door widths | *(not enforced)* | uncited — see "Gaps" |
 | Adjacency preference | Soft | scorer |
 | Aspect ratio | Soft | scorer |
@@ -173,6 +174,61 @@ rendering — two overlapping lines draw as one), which would double the
 block count on every interior wall if used directly for a takeoff. The
 dedup pass merges coincident/overlapping per-room segments into their true
 unique runs first.
+
+## Circulation (`core/layout_engine.py`, Phase 3)
+
+Every generated layout carries one or more auto-generated corridor
+segments (`RoomType.CORRIDOR` instances with IDs `circulation_1`,
+`circulation_2`, ...) so that **every room is reachable from the entrance
+through doors** — the Phase 0 audit's most severe finding was that nothing
+enforced this. This is entirely automatic: a request never has to ask for
+a `CORRIDOR` room to get one (an explicitly requested `CORRIDOR`/`FOYER`
+still works, but becomes an *extra* named room alongside the auto-spine,
+not a replacement for it).
+
+- **`CIRCULATION_CORRIDOR_WIDTH_M` = 1.20 m** — built corridor width.
+  Comfortably above the cited 1.0 m minimum (Rule 42(i)); not itself a
+  separate citation.
+- **`CIRCULATION_SINGLE_LOAD_THRESHOLD` = 3** — the max "primary" rooms
+  (an en-suite bathroom nests with its bedroom and doesn't count
+  separately) a single corridor-bordering cluster may hold before the
+  splitter inserts another corridor branch instead of placing them
+  directly. Keeps the auto-generated branching tree from producing an
+  unrealistically deep sliver of a room.
+- **`CIRCULATION_TARGET_PCT_MIN`/`MAX`** = 10–15% of built-up area — a
+  **soft** scoring target band (`core/scoring.py`), never a hard
+  rejection; the corridor-width construction above already guarantees the
+  hard minimum by construction.
+- **`min_door_clear_wall_m(room_type)`** — the real per-room-type hard
+  floor: the shortest wall that room's own door (`door_width_for`) needs
+  once corner clearances (`MIN_OPENING_EDGE_CLEARANCE_M`, 0.30 m) are
+  subtracted from both ends. The circulation splitter enforces this as a
+  floor on every room's stacking-axis span so a room is never cut so thin
+  its only connecting wall can't actually take a door — a bathroom's own
+  door only needs 1.35 m, but a bedroom's internal door needs 1.5 m, so a
+  flat constant undercounted every non-bathroom room type (the actual bug
+  the reachability hard check below caught during Phase 3).
+
+**Reachability is guaranteed two ways, deliberately redundant:**
+
+1. **By construction**: the splitter's corridor-insertion rule is
+   monotonic top-down (any corridor inserted below the root implies every
+   ancestor split up to the root was also a corridor split), so the whole
+   corridor tree is transitively connected back to the entrance, and every
+   leaf room touches whichever corridor immediately bounds it.
+2. **By validation**: `core/validator.py`'s reachability check walks the
+   *actual* door graph (`Layout.openings`), BFS from whichever room the
+   main entrance door opens into, and hard-rejects any layout where a room
+   isn't reachable. This is the check that actually caught real bugs
+   during Phase 3 that construction alone didn't prevent: a floating-point
+   edge case in `geometry.py::shared_wall`'s length comparison, a missing
+   opening between two corridor segments meeting at a junction
+   (`core/openings.py`), and the door-fit floor described above.
+
+En-suite bathrooms are the one deliberate exception: they connect only via
+their own bedroom's door, never directly to circulation — both
+`core/openings.py::_place_corridor_doors` and the reachability check treat
+this the same way (a reachable bedroom makes its en-suite reachable too).
 
 ## Construction standards
 

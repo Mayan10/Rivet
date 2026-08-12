@@ -44,7 +44,7 @@ def shared_wall(a: Rect, b: Rect, tol: float = 1e-3, min_length: float = 0.5) ->
         coord = a.x2 if abs(a.x2 - b.x) <= tol else a.x
         lo = max(a.y, b.y)
         hi = min(a.y2, b.y2)
-        if hi - lo >= min_length:
+        if hi - lo >= min_length - tol:
             return SharedWall(axis="vertical", coord=coord, lo=lo, hi=hi)
 
     # Horizontal wall: a.y2 touches b.y, or b.y2 touches a.y
@@ -52,7 +52,7 @@ def shared_wall(a: Rect, b: Rect, tol: float = 1e-3, min_length: float = 0.5) ->
         coord = a.y2 if abs(a.y2 - b.y) <= tol else a.y
         lo = max(a.x, b.x)
         hi = min(a.x2, b.x2)
-        if hi - lo >= min_length:
+        if hi - lo >= min_length - tol:
             return SharedWall(axis="horizontal", coord=coord, lo=lo, hi=hi)
 
     return None

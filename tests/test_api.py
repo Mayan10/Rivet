@@ -3,7 +3,15 @@ import pytest
 from rivet.api.app import create_app
 
 VALID_PAYLOAD = {
-    "plot": {"width_m": 12, "length_m": 15, "entrance": "north"},
+    # Sized to stay feasible once circulation takes its share of the
+    # buildable area (Phase 3) -- mirrors tests/conftest.py's sample_request.
+    "plot": {
+        "width_m": 15,
+        "length_m": 13,
+        "entrance": "north",
+        "abutting_road_width_m": 9,
+        "proposed_height_m": 6,
+    },
     "rooms": [
         {"room_type": "living_room", "count": 1},
         {"room_type": "master_bedroom", "count": 1, "attached_bathroom": True},
@@ -95,8 +103,8 @@ def test_download_unknown_token_is_404(client):
 def test_generate_accepts_ruleset_and_setback_inputs(client):
     payload = {
         "plot": {
-            "width_m": 12,
-            "length_m": 11,
+            "width_m": 15,
+            "length_m": 13,
             "entrance": "north",
             "num_floors": 2,
             "abutting_road_width_m": 9,
