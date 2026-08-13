@@ -27,7 +27,7 @@ from dataclasses import dataclass
 import networkx as nx
 
 from .graph import RoomNode
-from .models import Orientation, PlotSpec, Rect
+from .models import Orientation, PlotSpec, Rect, VastuOptions
 from .rules import (
     CIRCULATION_CORRIDOR_WIDTH_M,
     CIRCULATION_SINGLE_LOAD_THRESHOLD,
@@ -362,10 +362,11 @@ def _anneal(
     plot: PlotSpec,
     rng: random.Random,
     iterations: int = 400,
+    vastu: VastuOptions | None = None,
 ) -> SearchResult:
     order = list(initial_order)
     rects, corridor_ids = build_circulation_layout(buildable, order, plot.entrance)
-    result = evaluate(nodes, rects, buildable, plot, graph, corridor_ids=corridor_ids)
+    result = evaluate(nodes, rects, buildable, plot, graph, corridor_ids=corridor_ids, vastu=vastu)
 
     best_order, best_rects, best_corridor_ids, best_result = order, rects, corridor_ids, result
 
@@ -384,7 +385,9 @@ def _anneal(
                 candidate[i : j + 1] = reversed(candidate[i : j + 1])
 
         candidate_rects, candidate_corridor_ids = build_circulation_layout(buildable, candidate, plot.entrance)
-        candidate_result = evaluate(nodes, candidate_rects, buildable, plot, graph, corridor_ids=candidate_corridor_ids)
+        candidate_result = evaluate(
+            nodes, candidate_rects, buildable, plot, graph, corridor_ids=candidate_corridor_ids, vastu=vastu
+        )
 
         delta = candidate_result.penalty - result.penalty
         if delta < 0 or rng.random() < math.exp(-delta / max(temperature, 1e-6)):
@@ -406,6 +409,7 @@ def search_layouts(
     restarts: int = 8,
     iterations_per_restart: int = 400,
     seed: int | None = None,
+    vastu: VastuOptions | None = None,
 ) -> list[SearchResult]:
     """Multi-start simulated annealing over room orderings.
 
@@ -423,7 +427,7 @@ def search_layouts(
             order = list(nodes)
             rng.shuffle(order)
 
-        results.append(_anneal(order, buildable, graph, nodes, plot, rng, iterations_per_restart))
+        results.append(_anneal(order, buildable, graph, nodes, plot, rng, iterations_per_restart, vastu=vastu))
 
     results.sort(key=lambda r: r.result.penalty)
 

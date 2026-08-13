@@ -14,6 +14,7 @@ from ..core.models import (
     RoomRequirement,
     RoomType,
     Ruleset,
+    VastuOptions,
 )
 from ..render.raster import render_png_bytes
 from ..render.svg import render_svg
@@ -115,10 +116,42 @@ def parse_generation_request(payload: object) -> GenerationRequest:
         valid = ", ".join(r.value for r in Ruleset)
         raise RequestValidationError(f"'ruleset' must be one of: {valid}") from exc
 
+    vastu = _parse_vastu_options(payload.get("vastu"))
+
     try:
         return GenerationRequest(
-            plot=plot, rooms=rooms, num_candidates=num_candidates, seed=seed, ruleset=ruleset
+            plot=plot, rooms=rooms, num_candidates=num_candidates, seed=seed, ruleset=ruleset, vastu=vastu
         )
+    except ValueError as exc:
+        raise RequestValidationError(str(exc)) from exc
+
+
+def _parse_vastu_options(payload: object) -> VastuOptions:
+    if payload is None:
+        return VastuOptions()
+    if not isinstance(payload, dict):
+        raise RequestValidationError("'vastu' must be an object")
+
+    enabled = bool(payload.get("enabled", False))
+
+    try:
+        weight = float(payload.get("weight", 1.0))
+    except (TypeError, ValueError) as exc:
+        raise RequestValidationError("'vastu.weight' must be a number") from exc
+
+    plot_north_str = payload.get("plot_north")
+    plot_north = None
+    if plot_north_str is not None:
+        try:
+            plot_north = Orientation(str(plot_north_str).lower())
+        except ValueError as exc:
+            valid = ", ".join(o.value for o in Orientation)
+            raise RequestValidationError(f"'vastu.plot_north' must be one of: {valid}") from exc
+    elif enabled:
+        raise RequestValidationError("'vastu.plot_north' is required when 'vastu.enabled' is true")
+
+    try:
+        return VastuOptions(enabled=enabled, weight=weight, plot_north=plot_north)
     except ValueError as exc:
         raise RequestValidationError(str(exc)) from exc
 
@@ -192,6 +225,20 @@ def layout_to_dict(layout: Layout, *, dxf_url: str | None = None) -> dict:
         "score": layout.score,
         "score_breakdown": layout.score_breakdown,
         "violations": layout.violations,
+        # Deliberately its own top-level key, never merged into
+        # score_breakdown or metrics -- vastu is an uncited, optional
+        # preference, not code compliance. Empty unless the request
+        # enabled it. See docs/design_rules.md "Vastu".
+        "vastu_preferences": [
+            {
+                "name": p.name,
+                "description": p.description,
+                "room_id": p.room_id,
+                "room_label": p.room_label,
+                "satisfied": p.satisfied,
+            }
+            for p in layout.vastu_preferences
+        ],
         "gross_area_sqm": round(metrics.gross_area_sqm, 2),
         "metrics": metrics_to_dict(metrics),
         "rooms": [

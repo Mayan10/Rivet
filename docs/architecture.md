@@ -95,6 +95,21 @@ the same explicit seed. Fixed by using an insertion-ordered `dict` instead
 collection to anything in the search hot path, prefer `list`/`dict` over
 `set` unless you're certain nothing downstream depends on iteration order.
 
+## Vastu (`core/vastu.py`, Phase 5)
+
+An optional, disabled-by-default soft scoring module plugged directly
+into `scoring.evaluate` (`vastu: VastuOptions | None` parameter, threaded
+through `layout_engine.search_layouts`/`_anneal` alongside everything
+else the annealer already scores). It adds a `"vastu"` key to
+`breakdown` only when enabled, so a disabled request's search behaves
+exactly as it did before this module existed — see
+[`design_rules.md`](design_rules.md#vastu-corevastupy-phase-5--optional-uncited-soft-only)
+for the direction math and preference list. Structurally, the actual
+per-preference results never enter `breakdown` (a plain `dict[str,
+float]`) — they live in their own `Layout.vastu_preferences` list, kept
+separate so a caller can never conflate a vastu preference with a cited
+code-compliance figure.
+
 ## DXF export (`export/dxf/`, Phase 4)
 
 A package, not a single module: `units.py` (the one place metres become

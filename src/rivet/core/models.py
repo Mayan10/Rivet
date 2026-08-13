@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .validator import Violation
+    from .vastu import VastuPreferenceResult
 
 
 class RoomType(str, Enum):
@@ -30,6 +31,7 @@ class RoomType(str, Enum):
     STAIRCASE = "staircase"
     UTILITY = "utility"
     BALCONY = "balcony"
+    POOJA = "pooja"
 
 
 class Orientation(str, Enum):
@@ -47,6 +49,38 @@ class Ruleset(str, Enum):
 
     TNCDBR_2019 = "tncdbr_2019"
     GENERIC = "generic"
+
+
+@dataclass(frozen=True)
+class VastuOptions:
+    """Optional vastu-shastra directional-placement scoring (Phase 5,
+    docs/prompts.md). Lives here (not in core/vastu.py) for the same
+    reason ``Ruleset`` does -- ``GenerationRequest`` needs a concrete
+    type to construct a default instance from, and core/vastu.py needs
+    ``RoomType``/``Orientation`` from this module, so the dependency can
+    only run one way.
+
+    Disabled by default -- when ``enabled`` is False, core/vastu.py's
+    scoring is never even invoked (see core/scoring.py), so it has zero
+    effect on search output.
+
+    ``plot_north`` must be supplied explicitly whenever vastu is enabled:
+    core/models.py's own coordinate convention ("x -> east, y -> north")
+    is only ever an assumption of drawing convenience, not necessarily a
+    given plot's real surveyed orientation -- and vastu is the one
+    consumer in this codebase where that distinction actually changes an
+    answer, so it never silently inherits the assumption.
+    """
+
+    enabled: bool = False
+    weight: float = 1.0
+    plot_north: Orientation | None = None
+
+    def __post_init__(self) -> None:
+        if self.enabled and self.plot_north is None:
+            raise ValueError("VastuOptions.plot_north must be set explicitly when vastu is enabled")
+        if self.weight < 0:
+            raise ValueError("VastuOptions.weight must be >= 0")
 
 
 # Rooms that need daylight/ventilation and therefore a plot-boundary wall.
@@ -125,6 +159,7 @@ class GenerationRequest:
     num_candidates: int = 3
     seed: int | None = None
     ruleset: Ruleset = Ruleset.TNCDBR_2019
+    vastu: VastuOptions = field(default_factory=VastuOptions)
 
     def __post_init__(self) -> None:
         if not self.rooms:
@@ -227,6 +262,11 @@ class Layout:
     # Layout can still call core.metrics.compute_metrics against the
     # correct ruleset instead of silently defaulting to TNCDBR_2019.
     ruleset: Ruleset = Ruleset.TNCDBR_2019
+    # Empty unless GenerationRequest.vastu.enabled was True -- kept as its
+    # own field (never merged into score_breakdown's plain float dict) so
+    # a consumer can never confuse a vastu preference with a code-
+    # compliance figure. See core/vastu.py.
+    vastu_preferences: list[VastuPreferenceResult] = field(default_factory=list)
 
     def room(self, room_id: str) -> RoomInstance:
         for r in self.rooms:

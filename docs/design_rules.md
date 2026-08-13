@@ -69,6 +69,7 @@ splitting it across two modules:
 | Staircase | 4.0* | 0.75 | 5.0 | Rule 52(17)(a)(i) [*area uncited, width only] |
 | Utility | 2.5* | 1.2* | 3.5 | uncited placeholder |
 | Balcony | 2.0* | 1.0* | 3.5 | uncited placeholder |
+| Pooja | 1.0* | 0.9* | 2.5 | Rule 52(5)(b) [explicitly excluded from the habitable-room minimum; no separate minimum found] |
 
 Values marked `*` are uncited (either the whole row, for rooms TNCDBR
 doesn't specifically cover, or just that one dimension). The **kitchen
@@ -331,3 +332,46 @@ during development (see `tests/test_rules.py::test_no_generic_bedroom_bathroom_p
 Soft only. The plot-boundary wall the entrance orientation points at
 should open into a foyer, living room, corridor, or garage — not directly
 into a bedroom or bathroom.
+
+## Vastu (`core/vastu.py`, Phase 5 — optional, uncited, soft-only)
+
+**Disabled by default.** Vastu shastra is a traditional Indian
+architectural belief system, not a building code — nothing in this
+section is cited, none of it is enforced by `core/validator.py`, and it
+is never mixed into the hard/soft code-compliance table above. Enable it
+per-request via `GenerationRequest.vastu = VastuOptions(enabled=True,
+weight=..., plot_north=...)`; `Layout.vastu_preferences` (a separate list,
+never merged into `Layout.score_breakdown`'s plain float dict) and the
+API's `vastu_preferences` field report exactly which preferences were
+satisfied or violated, always kept structurally apart from anything code-
+compliance-related so a result can never be misread as "violates NBC/
+TNCDBR" when it's really "violates a vastu preference."
+
+**`plot_north` is required whenever vastu is enabled** — there is no
+default. `core/models.py`'s coordinate convention ("x → east, y → north")
+is a drawing-space assumption of convenience, not necessarily a given
+plot's real surveyed orientation; vastu is the one place in this codebase
+where that distinction changes an answer, so it's never silently
+inherited. `plot_north` names which *drawing* axis actually points at
+true north for this specific plot (reusing the same `Orientation` enum as
+`PlotSpec.entrance`); every direction check rotates into a true-north-
+aligned frame before classifying a room (see `core/vastu.py::true_compass_zone`).
+
+Rooms are classified into one of 8 compass sectors (45° each) by the
+bearing from the buildable rectangle's center to the room's own center —
+the standard simplified division most practical vastu tools use, not the
+finer vastu-purusha-mandala grid. Preferences checked:
+
+| Preference | Rule | Room type |
+|---|---|---|
+| `kitchen_southeast` | should be in the SE (Agni) zone | Kitchen |
+| `master_bedroom_southwest` | should be in the SW (Nairutya) zone | Master bedroom |
+| `pooja_northeast` | should be in the NE (Ishanya) zone | Pooja |
+| `toilet_avoid_northeast` | should avoid the NE (Ishanya) zone | Bathroom, Toilet |
+| `entrance_orientation` | main entrance should face N, NE, or E | — |
+
+Each violated preference adds a fixed penalty (`vastu.W_VASTU_VIOLATION`,
+uncited by construction) scaled by `VastuOptions.weight`, added to
+`score_breakdown["vastu"]` — present only when vastu is enabled, so a
+disabled request's breakdown is byte-identical to before this module
+existed.

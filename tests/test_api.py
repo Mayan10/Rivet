@@ -156,3 +156,40 @@ def test_rules_endpoint_accepts_ruleset_query_param(client):
 def test_rules_endpoint_rejects_invalid_ruleset(client):
     res = client.get("/api/v1/rules?ruleset=nonsense")
     assert res.status_code == 400
+
+
+def test_generate_without_vastu_field_has_no_vastu_preferences(client):
+    res = client.post("/api/v1/generate", json=VALID_PAYLOAD)
+    assert res.status_code == 200
+    for candidate in res.get_json()["candidates"]:
+        assert candidate["vastu_preferences"] == []
+        assert "vastu" not in candidate["score_breakdown"]
+
+
+def test_generate_with_vastu_enabled_returns_preferences(client):
+    payload = {
+        **VALID_PAYLOAD,
+        "rooms": [*VALID_PAYLOAD["rooms"], {"room_type": "pooja", "count": 1}],
+        "vastu": {"enabled": True, "weight": 1.0, "plot_north": "north"},
+    }
+    res = client.post("/api/v1/generate", json=payload)
+    assert res.status_code == 200
+    candidate = res.get_json()["candidates"][0]
+    assert candidate["vastu_preferences"]
+    assert "vastu" in candidate["score_breakdown"]
+    names = {p["name"] for p in candidate["vastu_preferences"]}
+    assert "pooja_northeast" in names
+
+
+def test_generate_rejects_vastu_enabled_without_plot_north(client):
+    payload = {**VALID_PAYLOAD, "vastu": {"enabled": True}}
+    res = client.post("/api/v1/generate", json=payload)
+    assert res.status_code == 400
+    assert "plot_north" in res.get_json()["error"]
+
+
+def test_generate_rejects_invalid_plot_north(client):
+    payload = {**VALID_PAYLOAD, "vastu": {"enabled": True, "plot_north": "up"}}
+    res = client.post("/api/v1/generate", json=payload)
+    assert res.status_code == 400
+    assert "plot_north" in res.get_json()["error"]

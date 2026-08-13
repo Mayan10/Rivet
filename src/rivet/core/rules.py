@@ -102,6 +102,12 @@ _TNCDBR_2019_ROOM_RULES: dict[RoomType, RoomRule] = {
     RoomType.STAIRCASE: RoomRule(4.0, 0.75, 5.0, 3.0, False, "TNCDBR 2019, Rule 52(17)(a)(i) [staircase min width 0.75m ordinary residential; area not separately specified]"),
     RoomType.UTILITY: RoomRule(2.5, 1.2, 3.5, 2.4, False, "uncited placeholder"),
     RoomType.BALCONY: RoomRule(2.0, 1.0, 3.5, 3.0, True, "uncited placeholder"),
+    # Rule 52(5)(b) itself names pooja room as explicitly excluded from the
+    # habitable-room minimum ("Pooja room, or store room shall not be
+    # taken as a habitable room") -- so unlike most rows here, this isn't
+    # an uncovered gap, it's the code saying no separate minimum applies.
+    # Kept soft-only (min == default) until a specific cited figure turns up.
+    RoomType.POOJA: RoomRule(1.0, 0.9, 2.5, 2.5, False, "TNCDBR 2019, Rule 52(5)(b) [explicitly excluded from the habitable-room minimum; no separate minimum found]"),
 }
 
 # GENERIC fallback: the original uncited placeholder values this module
@@ -124,6 +130,7 @@ _GENERIC_ROOM_RULES: dict[RoomType, RoomRule] = {
     RoomType.STAIRCASE: RoomRule(4.0, 1.0, 5.0, 3.0, False, "uncited placeholder"),
     RoomType.UTILITY: RoomRule(2.5, 1.2, 3.5, 2.4, False, "uncited placeholder"),
     RoomType.BALCONY: RoomRule(2.0, 1.0, 3.5, 3.0, True, "uncited placeholder"),
+    RoomType.POOJA: RoomRule(1.0, 0.9, 2.5, 2.5, False, "uncited placeholder"),
 }
 
 _ROOM_RULES_BY_RULESET: dict[Ruleset, dict[RoomType, RoomRule]] = {

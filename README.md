@@ -50,6 +50,12 @@ the room program you give it.
   scale-locked viewport, title block, and door/window/room schedules —
   not a soup of unlabeled traced line segments. See
   [`docs/architecture.md`](docs/architecture.md).
+- **Optional vastu scoring, never mixed with code compliance** — disabled
+  by default; enable it per-request with an explicit `plot_north` and it
+  reports directional preferences (kitchen SE, master bedroom SW, pooja
+  NE, toilet-avoid-NE, entrance orientation) as their own field, always
+  structurally separate from cited hard constraints. See
+  [`docs/design_rules.md`](docs/design_rules.md#vastu-corevastupy-phase-5--optional-uncited-soft-only).
 - **CLI, API, and web UI** — script it, integrate it, or just use the form.
 - **Lightweight** — no ML framework, no GPU, no system dependencies like
   Graphviz or Tesseract. `pip install -e .` and go.

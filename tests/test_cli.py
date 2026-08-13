@@ -47,6 +47,72 @@ def test_generate_writes_files_and_returns_zero(tmp_path, capsys):
     assert "score" in out
 
 
+def test_generate_with_vastu_prints_preferences(tmp_path, capsys):
+    out_dir = tmp_path / "out"
+    exit_code = main(
+        [
+            "generate",
+            "--width",
+            "15",
+            "--length",
+            "13",
+            "--road-width",
+            "9",
+            "--height",
+            "6",
+            "--room",
+            "living_room",
+            "--room",
+            "master_bedroom+ensuite",
+            "--room",
+            "bedroom:2+ensuite",
+            "--room",
+            "kitchen",
+            "--room",
+            "dining_room",
+            "--room",
+            "bathroom",
+            "--room",
+            "pooja",
+            "--vastu",
+            "--plot-north",
+            "north",
+            "--seed",
+            "42",
+            "--candidates",
+            "1",
+            "--out-dir",
+            str(out_dir),
+            "--formats",
+            "png",
+        ]
+    )
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "vastu:" in out
+    assert "preferences satisfied" in out
+
+
+def test_generate_vastu_without_plot_north_exits(tmp_path):
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "generate",
+                "--width",
+                "15",
+                "--length",
+                "13",
+                "--room",
+                "living_room",
+                "--vastu",
+                "--seed",
+                "1",
+                "--out-dir",
+                str(tmp_path / "out"),
+            ]
+        )
+
+
 def test_generate_infeasible_request_returns_one(tmp_path, capsys):
     exit_code = main(
         [

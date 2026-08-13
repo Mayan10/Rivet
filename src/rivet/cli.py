@@ -22,6 +22,7 @@ from .core.models import (
     RoomRequirement,
     RoomType,
     Ruleset,
+    VastuOptions,
 )
 from .core.rules import room_rules_for, validate_request
 from .export.dxf import export_dxf
@@ -104,6 +105,18 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Proposed building height in meters (TNCDBR_2019 setback input; estimated from --floors if omitted)",
     )
+    gen.add_argument(
+        "--vastu", action="store_true", help="Enable optional vastu-shastra directional scoring (soft, uncited)"
+    )
+    gen.add_argument(
+        "--vastu-weight", type=float, default=1.0, help="Scales the vastu soft-penalty contribution (default 1.0)"
+    )
+    gen.add_argument(
+        "--plot-north",
+        choices=[o.value for o in Orientation],
+        default=None,
+        help="Which drawing direction true north actually points -- required with --vastu",
+    )
 
     rules_cmd = sub.add_parser("rules", help="Print the design rulebook as JSON")
     rules_cmd.add_argument("--ruleset", choices=[r.value for r in Ruleset], default=Ruleset.TNCDBR_2019.value)
@@ -137,8 +150,16 @@ def _run_generate(args: argparse.Namespace) -> int:
     for issue in issues:
         print(f"[warning] {issue}", file=sys.stderr)
 
+    if args.vastu and args.plot_north is None:
+        raise SystemExit("--plot-north is required when --vastu is set")
+    vastu = VastuOptions(
+        enabled=args.vastu,
+        weight=args.vastu_weight,
+        plot_north=Orientation(args.plot_north) if args.plot_north is not None else None,
+    )
+
     request = GenerationRequest(
-        plot=plot, rooms=room_reqs, num_candidates=args.candidates, seed=args.seed, ruleset=ruleset
+        plot=plot, rooms=room_reqs, num_candidates=args.candidates, seed=args.seed, ruleset=ruleset, vastu=vastu
     )
     result = generate(request)
 
@@ -161,6 +182,14 @@ def _run_generate(args: argparse.Namespace) -> int:
         print(status)
         for v in layout.violations:
             print(f"   - {v}")
+        if layout.vastu_preferences:
+            # Printed separately from the soft "notes" above -- vastu is
+            # never code compliance, see docs/design_rules.md "Vastu".
+            satisfied = sum(1 for p in layout.vastu_preferences if p.satisfied)
+            print(f"   vastu: {satisfied}/{len(layout.vastu_preferences)} preferences satisfied")
+            for p in layout.vastu_preferences:
+                mark = "OK" if p.satisfied else "violated"
+                print(f"     - [{mark}] {p.room_label}: {p.description}")
 
         if "png" in formats:
             render_png(layout).save(f"{base}.png")

@@ -539,6 +539,50 @@ Do not implement IFC or DWG in this phase.
 
 ### Phase 5: vastu as an optional soft module
 
+**Status: done (2026-08-13).** `core/vastu.py`, disabled by default via
+`GenerationRequest.vastu: VastuOptions` (`enabled`, `weight`,
+`plot_north`). Three questions resolved before writing code (this phase
+touches scoring, so per CLAUDE.md's rule the design was presented and
+confirmed first):
+
+1. **Pooja room type**: added `RoomType.POOJA`, since the spec's "pooja
+   northeast" preference needs a real room type to attach to. Turned out
+   TNCDBR 2019, Rule 52(5)(b) itself names pooja room as explicitly
+   excluded from the habitable-room minimum -- so the uncited-placeholder
+   treatment in `core/rules.py` isn't a gap, it's what the code actually
+   says.
+2. **`plot_north` modeling**: reused the existing `Orientation` enum
+   (same as `PlotSpec.entrance`) rather than a numeric degree field --
+   vastu's own zones are quadrant-based, not degree-precise, so the extra
+   precision wouldn't change any classification. Required (no default)
+   whenever `vastu.enabled` -- `core/models.py`'s "x -> east, y -> north"
+   convention is a drawing-space assumption, not necessarily a given
+   plot's real survey orientation, and this is the one place that
+   distinction actually matters.
+3. **API/CLI wiring**: threaded through both in this same phase (JSON
+   `vastu: {enabled, weight, plot_north}`, CLI `--vastu`/
+   `--vastu-weight`/`--plot-north`), matching how every other
+   `GenerationRequest` field already reaches both surfaces.
+
+Rooms are classified into 8 compass sectors by bearing from the buildable
+rect's center, rotated into a true-north-aligned frame first (see
+`vastu.py::true_compass_zone` and `docs/design_rules.md` "Vastu" for the
+rotation derivation). Five preferences: kitchen SE, master bedroom SW,
+pooja NE, toilet/bathroom avoid NE, entrance faces N/NE/E. Each violated
+preference is a fixed, uncited penalty scaled by `weight`, surfaced as
+`score_breakdown["vastu"]` (present only when enabled) and
+`Layout.vastu_preferences` -- a dedicated list, never merged into the
+plain-float `score_breakdown` dict, so a result can never be misread as
+code compliance. `tests/test_vastu.py` covers the rotation math for all
+four `plot_north` values, preference evaluation, the `VastuOptions`
+validation (`plot_north` required when enabled, weight >= 0), and the
+phase's own stated requirement: with vastu disabled, `generate()` output
+is byte-identical to the Phase 3/4 baseline for the same seed (verified
+directly, not just inferred from the rest of the suite still passing).
+Cross-process determinism was re-verified with vastu *enabled* too (not
+just disabled), since it introduces a new code path inside the annealing
+loop. 219 tests passing.
+
 ```
 Read CLAUDE.md. Implement Phase 5 only.
 

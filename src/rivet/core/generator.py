@@ -75,6 +75,7 @@ def _build_layout(candidate_id, sr, nodes, buildable, request, graph) -> Layout:
         score_breakdown=sr.result.breakdown,
         violations=sr.result.violations,
         ruleset=request.ruleset,
+        vastu_preferences=sr.result.vastu_preferences,
     )
 
 
@@ -101,6 +102,7 @@ def generate(request: GenerationRequest) -> list[Layout] | InfeasibleResult:
         num_candidates=pool_size,
         restarts=restarts,
         seed=request.seed,
+        vastu=request.vastu,
     )
 
     valid: list[Layout] = []

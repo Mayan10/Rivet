@@ -19,13 +19,13 @@ during simulated annealing, and the generator uses the derived 0-100
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import networkx as nx
 
 from .geometry import MIN_USABLE_SHARED_WALL_M, entrance_edge, room_touches_edge, shared_wall
 from .graph import RoomNode
-from .models import PlotSpec, Rect
+from .models import PlotSpec, Rect, VastuOptions
 from .rules import (
     ADJACENCY_AVOID,
     CIRCULATION_TARGET_PCT_MAX,
@@ -33,6 +33,7 @@ from .rules import (
     ENTRANCE_COMPATIBLE_ROOMS,
     is_avoided_adjacency,
 )
+from .vastu import VastuPreferenceResult, evaluate_vastu
 
 # Penalty weights. These are tuned so that a single serious soft issue
 # dominates many small ones, while still letting simulated annealing find
@@ -52,6 +53,11 @@ class ScoreResult:
     score: float  # 0-100, higher is better
     breakdown: dict[str, float]
     violations: list[str]
+    # Empty unless vastu was enabled -- kept separate from `breakdown`
+    # (never merged into that plain float dict) so a consumer can never
+    # confuse a vastu preference with a code-compliance figure. See
+    # core/vastu.py and docs/design_rules.md "Vastu".
+    vastu_preferences: list[VastuPreferenceResult] = field(default_factory=list)
 
 
 def evaluate(
@@ -61,6 +67,7 @@ def evaluate(
     plot: PlotSpec,
     graph: nx.Graph,
     corridor_ids: frozenset[str] = frozenset(),
+    vastu: VastuOptions | None = None,
 ) -> ScoreResult:
     breakdown = {
         "area_error": 0.0,
@@ -137,9 +144,17 @@ def evaluate(
             excess = (circulation_pct - CIRCULATION_TARGET_PCT_MAX) / CIRCULATION_TARGET_PCT_MAX
             breakdown["circulation"] += W_CIRCULATION * excess
 
+    vastu_preferences: list[VastuPreferenceResult] = []
+    if vastu is not None and vastu.enabled:
+        vastu_result = evaluate_vastu(nodes, rects, buildable, plot, vastu)
+        breakdown["vastu"] = vastu_result.penalty
+        vastu_preferences = vastu_result.preferences
+
     penalty = sum(breakdown.values())
     score = round(max(0.0, 100.0 - penalty), 1)
-    return ScoreResult(penalty=penalty, score=score, breakdown=breakdown, violations=violations)
+    return ScoreResult(
+        penalty=penalty, score=score, breakdown=breakdown, violations=violations, vastu_preferences=vastu_preferences
+    )
 
 
 __all__ = [
