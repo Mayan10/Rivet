@@ -1,10 +1,11 @@
 """API key management (docs/saas-buildout.md sections 5 & 9).
 
-Not yet gated to a paid tier -- entitlements don't exist until Phase 9.
 Creation requires session auth specifically (not just any org-scoped
 api-key auth): ``api_keys.created_by`` is a real user reference, and an
 API key isn't itself tied to one. Listing/revoking only need an org, so
-either auth method works for those.
+either auth method works for those. Creation is also gated to
+Entitlements.api_access (Phase 9 -- carried forward from Phase 7, which
+implemented the mechanism before entitlements existed to gate it with).
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from ...auth.api_keys import generate_api_key
 from ...auth.dependencies import RequestContext, require_context
+from ...billing.entitlements import entitlements_for
 from ...db.models import ApiKey
 from ...db.session import get_db
 from ..errors import ApiError
@@ -54,6 +56,9 @@ def create_api_key(
 ) -> dict:
     if context.user is None or context.org is None:
         raise ApiError("unauthorized", "API keys can only be created by a signed-in user.", status_code=401)
+
+    if not entitlements_for(db, context.org).api_access:
+        raise ApiError("plan_required", "API keys are not included in your plan.", status_code=403)
 
     generated = generate_api_key()
     key = ApiKey(

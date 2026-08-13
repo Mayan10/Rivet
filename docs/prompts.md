@@ -839,6 +839,99 @@ command, and the official `minio/minio` image needs one) service
 container alongside Postgres. 271 tests passing (219 engine + 52
 service).
 
+*(2026-08-13 correction: `bitnami/minio:latest` stopped resolving --
+Bitnami moved free images to `bitnamilegacy/*` with pinned tags only, no
+`latest`. CI's `minio` service container now pins
+`bitnamilegacy/minio:2025.7.23-debian-12-r5`; check
+`hub.docker.com/r/bitnamilegacy/minio/tags` if this 404s again later.)*
+
+### Phase 9 status
+
+**Status: done (2026-08-13).** Two decisions confirmed before writing
+code:
+
+1. **`organizations.plan_code` stopgap column** (plain string, FK to a
+   new `plans` table) rather than waiting for Phase 10's real
+   Stripe-driven `subscriptions` table. Every org defaults to `"free"`.
+   Phase 10 replaces how `plan_code` gets set (webhook-driven instead of
+   the server default) but not `entitlements_for`'s read path, so this
+   doesn't get thrown away.
+2. **Watermarking as service-layer post-processing**, not a renderer
+   parameter -- `watermark.py` overlays a tiled, rotated text pattern on
+   already-rendered PNG (Pillow) and SVG (regex + string-splice) bytes.
+   Keeps `src/rivet/render/` from ever learning that plans or watermarks
+   exist (CLAUDE.md's layer-separation boundary). DXF is never
+   watermarked -- free tier doesn't get DXF at all, gated by
+   `Entitlements.dxf_export`.
+
+Shipped: `db/models/plan.py`, `db/models/usage_event.py`, migration
+`973d9f8b6567` (creates `plans` + `usage_events`, adds
+`organizations.plan_code`, seeds free/pro/studio literally rather than
+importing `billing/plans.py` -- see that module's docstring for why);
+`billing/plans.py` (tier definitions + the three absolute safety
+ceilings: 2500 sqm plot, 30 rooms, 10 candidates -- section 7's "someone
+will POST a 500m x 500m plot" case); `billing/entitlements.py`
+(`Entitlements` frozen dataclass, `entitlements_for`,
+`generations_used_this_period` summing `UsageEvent.quantity` over the
+current calendar-month-UTC period -- no real billing cycle exists yet to
+anchor to); `watermark.py`; `api/validation.py`
+(`enforce_absolute_ceilings` -- universal, applies even to the
+unauthenticated `/generate` endpoint; `clamp_to_entitlements` -- silently
+reduces `num_candidates` to the plan's limit, rejects oversized
+plot/room-count outright since silently shrinking someone's plot would
+change their request, not just reduce it).
+
+Three enforcement points, matching section 7 exactly: request validation
+(both `/generate` and `/projects/{id}/generations`), quota-check before
+enqueue (`quota_exceeded`, 403, checked before `clamp_to_entitlements`
+so a maxed-out free org can't even get a clamped-down generation),
+DXF-gate in the download handler (`plan_required`, 403, PNG/SVG stay
+ungated). `UsageEvent` rows are written at enqueue time (compute is
+consumed by the attempt, whether or not the engine finds a feasible
+layout) and at DXF download time -- append-only, never a mutable
+counter, per section 4.
+
+Two bugs found and fixed empirically (not just via review), consistent
+with this project's "verify against a real database" practice:
+
+- **JSONB double-encoding** in the migration's seed data --
+  `op.bulk_insert` with a pre-`json.dumps()`'d string stored an escaped
+  string *inside* the JSONB column instead of a queryable object.
+  SQLAlchemy's JSONB type already serializes; passing the raw dict fixed
+  it. Caught by querying the seeded rows with `psql`'s `->>'` accessor
+  after migrating, not by reading the code.
+- **Missing `ondelete` on `usage_events.generation_id`** -- `DELETE
+  /generations/{id}` relies on `ondelete="CASCADE"` for candidates/
+  artifacts, but the new FK had no `ondelete` at all, so deleting a
+  generation with any usage events (i.e. any generation that was ever
+  actually created) started failing with a `ForeignKeyViolation`. Fixed
+  as `ondelete="SET NULL"`, not `CASCADE` -- the ledger entry, and the
+  quota it already consumed, must outlive a user deleting the generation
+  it refers to. Caught by the full test suite, not anticipated in
+  advance.
+
+`tests/service/conftest.py`'s `_DB_TABLES` cleanup list gained
+`"usage_events"` (FK-ordered before `generations`) -- the same class of
+bug as the `ondelete` one above, just in test cleanup instead of the
+route: a table with a FK to `generations` that nothing knew to delete
+first. New test coverage: `test_entitlements.py` (plan lookup, upgrade
+reflection, period-boundary math, `dxf_export` vs. `generation` kind
+separation) plus new cases in `test_generations.py` (candidate clamping,
+DXF gating, watermark-on-free-tier, quota exhaustion at the 5th
+generation, absolute-ceiling rejection) and `test_me.py` (now asserts
+real `plan`/`entitlements`/`usage_this_period` instead of the
+Phase-6-era `None` placeholders). Existing Phase 7 API-key tests and
+Phase 8 generation/download tests needed updating in place where Phase 9
+legitimately changed their assumptions (a fresh org is no longer
+`api_access`-less by omission, download of `format=dxf` is no longer
+unconditional) -- upgraded to a `studio`-plan org via direct DB write
+(no admin endpoint exists yet) so they keep testing what they were
+written to test, with the free-tier-specific behavior covered by new,
+separate tests instead. 281 tests passing (219 engine + 62 service).
+Both fresh-venv install paths (`.[dev]` alone, `.[dev,service]`)
+reverified green, including the engine-only path's clean skip of
+`tests/service` with no Postgres/service-extra present.
+
 ---
 
 ## 5. Things to decide before you start

@@ -22,6 +22,12 @@ class Organization(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(nullable=False)
+    # Phase 9: no subscriptions table yet (that's Phase 10's real,
+    # webhook-driven billing sync) -- this plain column is what
+    # billing.entitlements.entitlements_for() reads until then. Phase 10
+    # migrates this into the subscriptions table's plan_code without
+    # anyone's entitlements silently changing.
+    plan_code: Mapped[str] = mapped_column(ForeignKey("plans.code"), nullable=False, server_default="free")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

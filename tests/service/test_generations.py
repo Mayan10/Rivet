@@ -42,8 +42,29 @@ def _run_worker_once() -> None:
     SimpleWorker([get_queue()], connection=get_redis_connection()).work(burst=True)
 
 
-def _create_project(client) -> str:
-    client.post("/api/v1/auth/register", json=VALID_REGISTER)
+def _create_project(client, *, email: str = VALID_REGISTER["email"]) -> str:
+    # Studio, not free: these tests exercise generation/download mechanics
+    # (lifecycle, artifact storage, deletion) that predate Phase 9 and
+    # were written assuming an unclamped num_candidates and ungated DXF
+    # export. A free-tier org would clamp/gate those and turn every one
+    # of these into an entitlements test instead of what it's actually
+    # testing -- entitlements get their own dedicated tests below.
+    from rivet_service.db.models import Organization
+    from rivet_service.db.session import SessionLocal
+
+    res = client.post("/api/v1/auth/register", json={"email": email, "password": "hunter22222"})
+    org_id = res.json()["org"]["id"]
+
+    db = SessionLocal()
+    try:
+        import uuid
+
+        org = db.get(Organization, uuid.UUID(org_id))
+        org.plan_code = "studio"
+        db.commit()
+    finally:
+        db.close()
+
     return client.post("/api/v1/projects", json={"name": "Test Project"}).json()["id"]
 
 
@@ -167,3 +188,72 @@ def test_delete_generation_removes_it_and_its_artifacts(client):
 def test_generations_require_authentication(client):
     res = client.get("/api/v1/generations/00000000-0000-0000-0000-000000000000")
     assert res.status_code == 401
+
+
+def test_free_tier_clamps_num_candidates_to_plan_limit(client):
+    # Default free plan: max_candidates == 1 (billing/plans.py). Asking
+    # for 2 shouldn't fail the request -- it's a graceful degradation,
+    # not a rejection (api/validation.py's clamp_to_entitlements).
+    client.post("/api/v1/auth/register", json={"email": "free-clamp@example.com", "password": "hunter22222"})
+    project_id = client.post("/api/v1/projects", json={"name": "Free Project"}).json()["id"]
+
+    res = client.post(f"/api/v1/projects/{project_id}/generations", json=VALID_GENERATE_PAYLOAD)
+    assert res.status_code == 202
+    gen_id = res.json()["generation_id"]
+    _run_worker_once()
+
+    body = client.get(f"/api/v1/generations/{gen_id}").json()
+    assert body["status"] == "succeeded"
+    assert len(body["candidates"]) == 1
+
+
+def test_free_tier_dxf_download_requires_plan_upgrade(client):
+    client.post("/api/v1/auth/register", json={"email": "free-dxf@example.com", "password": "hunter22222"})
+    project_id = client.post("/api/v1/projects", json={"name": "Free Project"}).json()["id"]
+    gen_id = client.post(f"/api/v1/projects/{project_id}/generations", json=VALID_GENERATE_PAYLOAD).json()[
+        "generation_id"
+    ]
+    _run_worker_once()
+
+    res = client.get(f"/api/v1/generations/{gen_id}/candidates/1/download?format=dxf")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "plan_required"
+
+    # PNG/SVG stay ungated -- only dxf_export is a plan-gated format.
+    res_png = client.get(f"/api/v1/generations/{gen_id}/candidates/1/download?format=png")
+    assert res_png.status_code == 200
+
+
+def test_free_tier_artifacts_are_watermarked(client):
+    client.post("/api/v1/auth/register", json={"email": "free-watermark@example.com", "password": "hunter22222"})
+    project_id = client.post("/api/v1/projects", json={"name": "Free Project"}).json()["id"]
+    gen_id = client.post(f"/api/v1/projects/{project_id}/generations", json=VALID_GENERATE_PAYLOAD).json()[
+        "generation_id"
+    ]
+    _run_worker_once()
+
+    res = client.get(f"/api/v1/generations/{gen_id}/candidates/1/download?format=png")
+    assert res.status_code == 200
+    assert res.json()["watermarked"] is True
+
+
+def test_quota_exceeded_after_monthly_limit(client):
+    # Free plan: monthly_generations == 5 (billing/plans.py).
+    client.post("/api/v1/auth/register", json={"email": "free-quota@example.com", "password": "hunter22222"})
+    project_id = client.post("/api/v1/projects", json={"name": "Free Project"}).json()["id"]
+
+    for _ in range(5):
+        res = client.post(f"/api/v1/projects/{project_id}/generations", json=VALID_GENERATE_PAYLOAD)
+        assert res.status_code == 202
+
+    res = client.post(f"/api/v1/projects/{project_id}/generations", json=VALID_GENERATE_PAYLOAD)
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "quota_exceeded"
+
+
+def test_absolute_ceiling_rejects_oversized_request(client):
+    project_id = _create_project(client, email="ceiling-test@example.com")
+    oversized_payload = {**VALID_GENERATE_PAYLOAD, "num_candidates": 999}
+    res = client.post(f"/api/v1/projects/{project_id}/generations", json=oversized_payload)
+    assert res.status_code == 400
+    assert res.json()["error"]["code"] == "validation_failed"

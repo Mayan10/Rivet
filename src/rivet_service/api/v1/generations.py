@@ -1,7 +1,9 @@
 """Async generate flow (docs/saas-buildout.md sections 6 & 9): validate,
-write a queued row, enqueue, return 202. No quota/entitlement check yet
-(Phase 9) -- any authenticated org can enqueue as many generations as it
-wants, same deferral pattern Phase 7 used for API-key paid-tier gating.
+check quota, write a queued row, enqueue, return 202. Entitlements are
+enforced in exactly two of this module's three places (the third,
+request validation, is api/validation.py, used before this module ever
+sees the request): quota before enqueue, and the DXF gate in the
+download handler.
 
 Downloads return a JSON ``{"download_url": ...}`` rather than redirecting
 -- lets a frontend decide whether to open it, embed it, etc., and matches
@@ -19,14 +21,16 @@ from sqlalchemy.orm import Session as DbSession
 from rivet.core.version import ENGINE_VERSION, RULEBOOK_VERSION
 
 from ...auth.dependencies import RequestContext, require_context
+from ...billing.entitlements import entitlements_for, generations_used_this_period
 from ...config import get_settings
-from ...db.models import Artifact, Candidate, Generation, GenerationStatus
+from ...db.models import Artifact, Candidate, Generation, GenerationStatus, UsageEvent
 from ...db.session import get_db
 from ...jobs.queue import get_queue
 from ...jobs.tasks import run_generation_job
 from ...storage import get_storage_adapter
 from ..errors import ApiError
 from ..schemas import GenerateRequestIn, to_generation_request
+from ..validation import clamp_to_entitlements, enforce_absolute_ceilings
 from ._ownership import get_owned_generation, get_owned_project
 
 router = APIRouter(tags=["generations"])
@@ -60,20 +64,38 @@ def create_generation(
     db: DbSession = Depends(get_db),
 ) -> dict:
     project = get_owned_project(db, context, project_id)
-    to_generation_request(payload)  # validates early, raises ApiError on bad input -- same checks /generate does
+    request = to_generation_request(payload)  # validates early, raises ApiError on bad input
+    enforce_absolute_ceilings(request)
+
+    entitlements = entitlements_for(db, context.org)
+    if generations_used_this_period(db, context.org.id) >= entitlements.monthly_generations:
+        raise ApiError(
+            "quota_exceeded",
+            f"Monthly generation limit ({entitlements.monthly_generations}) reached for this plan.",
+            status_code=403,
+        )
+    request = clamp_to_entitlements(request, entitlements)  # may reject (plot/rooms) or reduce num_candidates
+
+    request_json = payload.model_dump()
+    request_json["num_candidates"] = request.num_candidates  # reflects what was actually enqueued, not the ask
 
     generation = Generation(
         project_id=project.id,
         org_id=context.org.id,
         created_by=context.user.id if context.user else None,
         status=GenerationStatus.QUEUED.value,
-        request_json=payload.model_dump(),
+        request_json=request_json,
         seed=payload.seed,
         engine_version=ENGINE_VERSION,
         rulebook_version=RULEBOOK_VERSION,
         queued_at=datetime.now(timezone.utc),
     )
     db.add(generation)
+    db.flush()
+    # Recorded at enqueue time, not completion -- compute is consumed
+    # (and quota should count against) the attempt itself, whether or not
+    # the engine goes on to find a feasible layout.
+    db.add(UsageEvent(org_id=context.org.id, kind="generation", generation_id=generation.id))
     db.commit()
 
     settings = get_settings()
@@ -123,6 +145,13 @@ def download_candidate_artifact(
     artifact = db.query(Artifact).filter_by(candidate_id=candidate.id, kind=format).first()
     if artifact is None:
         raise ApiError("not_found", f"No '{format}' artifact for this candidate.", status_code=404)
+
+    if format == "dxf":
+        entitlements = entitlements_for(db, context.org)
+        if not entitlements.dxf_export:
+            raise ApiError("plan_required", "DXF export is not included in your plan.", status_code=403)
+        db.add(UsageEvent(org_id=context.org.id, kind="dxf_export", generation_id=generation.id))
+        db.commit()
 
     settings = get_settings()
     storage = get_storage_adapter()

@@ -21,21 +21,27 @@ from rivet.render.raster import render_png_bytes
 from rivet.render.svg import render_svg
 
 from ..api.schemas import GenerateRequestIn, to_generation_request
-from ..db.models import Artifact, Candidate, Generation, GenerationStatus
+from ..billing.entitlements import entitlements_for
+from ..db.models import Artifact, Candidate, Generation, GenerationStatus, Organization
 from ..db.session import SessionLocal
 from ..storage import get_storage_adapter
+from ..watermark import watermark_png, watermark_svg
 
 logger = logging.getLogger(__name__)
 
 _CONTENT_TYPES = {"png": "image/png", "svg": "image/svg+xml", "dxf": "application/dxf"}
 
 
-def _render_artifacts(layout) -> list[tuple[str, bytes]]:
-    return [
-        ("png", render_png_bytes(layout)),
-        ("svg", render_svg(layout).encode("utf-8")),
-        ("dxf", export_dxf_bytes(layout)),
-    ]
+def _render_artifacts(layout, *, watermark: bool) -> list[tuple[str, bytes]]:
+    png = render_png_bytes(layout)
+    svg = render_svg(layout).encode("utf-8")
+    if watermark:
+        png = watermark_png(png)
+        svg = watermark_svg(svg.decode("utf-8")).encode("utf-8")
+    # DXF is never watermarked -- free tier doesn't get DXF at all
+    # (Entitlements.dxf_export gates the whole format), so there's no
+    # "watermarked DXF" to produce.
+    return [("png", png), ("svg", svg), ("dxf", export_dxf_bytes(layout))]
 
 
 def run_generation_job(generation_id: str) -> None:
@@ -66,6 +72,10 @@ def run_generation_job(generation_id: str) -> None:
                 db.commit()
                 return
 
+            org = db.get(Organization, generation.org_id)
+            entitlements = entitlements_for(db, org)
+            watermark = entitlements.watermark_previews
+
             storage = get_storage_adapter()
             for i, layout in enumerate(result, start=1):
                 candidate = Candidate(
@@ -74,7 +84,7 @@ def run_generation_job(generation_id: str) -> None:
                 db.add(candidate)
                 db.flush()
 
-                for kind, data in _render_artifacts(layout):
+                for kind, data in _render_artifacts(layout, watermark=watermark):
                     # Never guessable/sequential (section 6) -- the path
                     # prefix is only for a human skimming a bucket
                     # listing, the actual key component is a fresh uuid.
@@ -87,7 +97,7 @@ def run_generation_job(generation_id: str) -> None:
                             storage_key=key,
                             size_bytes=len(data),
                             sha256=hashlib.sha256(data).hexdigest(),
-                            watermarked=False,
+                            watermarked=(watermark and kind in ("png", "svg")),
                         )
                     )
 

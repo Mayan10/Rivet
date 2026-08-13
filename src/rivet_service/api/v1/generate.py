@@ -11,6 +11,10 @@ until FastAPI reaches parity).
 No DXF download URL yet -- Phase 6 has no object storage or download
 token concept (that's Phase 8), so ``dxf_url`` is always null here for
 now; the candidate's SVG/PNG are still returned inline as before.
+
+Phase 9: still unauthenticated, so no plan/quota to check against -- but
+it does get the same universal, plan-independent safety ceilings
+(api/validation.py) every generation request gets, authenticated or not.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from rivet.core.models import InfeasibleResult
 
 from ..errors import ApiError
 from ..schemas import GenerateRequestIn, to_generation_request
+from ..validation import enforce_absolute_ceilings
 
 router = APIRouter(tags=["generate"])
 
@@ -30,6 +35,7 @@ router = APIRouter(tags=["generate"])
 @router.post("/generate")
 def generate_endpoint(payload: GenerateRequestIn) -> dict:
     request = to_generation_request(payload)
+    enforce_absolute_ceilings(request)
     result = generate(request)
 
     if isinstance(result, InfeasibleResult):

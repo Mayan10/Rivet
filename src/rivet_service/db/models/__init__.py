@@ -8,8 +8,10 @@ from .artifact import Artifact
 from .candidate import Candidate
 from .generation import Generation, GenerationStatus
 from .organization import Membership, MembershipRole, Organization
+from .plan import Plan
 from .project import Project
 from .session import Session
+from .usage_event import UsageEvent
 from .user import User
 
 __all__ = [
@@ -21,7 +23,9 @@ __all__ = [
     "Membership",
     "MembershipRole",
     "Organization",
+    "Plan",
     "Project",
     "Session",
+    "UsageEvent",
     "User",
 ]

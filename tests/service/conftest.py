@@ -55,6 +55,7 @@ from sqlalchemy import text  # only importable once the try/except above has suc
 _DB_TABLES = (
     "artifacts",
     "candidates",
+    "usage_events",
     "generations",
     "projects",
     "sessions",

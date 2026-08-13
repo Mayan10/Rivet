@@ -12,8 +12,8 @@ def test_me_reflects_session_auth(client):
     assert body["auth_method"] == "session"
     assert body["role"] == "owner"
     assert body["user"]["email"] == "me-test@example.com"
-    # Not built until Phase 9 -- explicitly null, not omitted, so the
-    # response shape doesn't change once they land.
-    assert body["plan"] is None
-    assert body["entitlements"] is None
-    assert body["usage_this_period"] is None
+    # Phase 9: freshly-registered orgs default to the free plan.
+    assert body["plan"] == "free"
+    assert body["entitlements"]["monthly_generations"] == 5
+    assert body["entitlements"]["max_candidates"] == 1
+    assert body["usage_this_period"] == {"generations": 0}
