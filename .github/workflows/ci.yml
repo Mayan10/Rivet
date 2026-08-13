@@ -38,3 +38,51 @@ jobs:
             --room bedroom:2+ensuite --room kitchen --room dining_room \
             --room bathroom --seed 1 --out-dir /tmp/rivet-ci-out
           test -f /tmp/rivet-ci-out/candidate-1.dxf
+
+  service-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: rivet
+          POSTGRES_PASSWORD: rivet
+          POSTGRES_DB: rivet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rivet"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://rivet:rivet@localhost:5432/rivet
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Single Python version for the service layer (not the full 3.10-3.12
+      # matrix the engine gets) -- FastAPI/SQLAlchemy version compatibility
+      # across that range isn't the thing this job exists to catch, and it
+      # would triple the runtime for no real signal.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package (with dev + service extras)
+        run: pip install -e ".[dev,service]"
+
+      # Linting the whole repo (including src/rivet_service, tests/service)
+      # already happens in the `test` job's `ruff check src tests` -- no
+      # need to repeat it here.
+
+      - name: Run migrations
+        run: alembic -c alembic.ini upgrade head
+
+      - name: Test
+        run: pytest tests/service -q
+
+      - name: Build image
+        run: docker build -t rivet-service:ci .

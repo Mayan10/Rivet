@@ -646,6 +646,59 @@ Constraints:
 | 11 | Hardening: rate limits, CORS, CSRF, Sentry, structured JSON logging with request ids, absolute input clamps, ToS acceptance with version and timestamp, real account deletion including object storage. |
 | 12 | Deploy: production Dockerfile, migrations as a release step, staging environment, smoke test script, runbook in docs/. |
 
+### Phase 6 status
+
+**Status: done (2026-08-13).** Four decisions confirmed before writing
+code (per the template above):
+
+1. **Flask stays running as-is.** `src/rivet/api/` (Flask) and `web/` are
+   untouched; the new FastAPI service grows alongside it phase by phase
+   and Flask gets removed once FastAPI reaches parity (room-types, rules,
+   download -- expected around Phase 8-9), not this phase. Avoids a flag
+   day that breaks the working demo mid-buildout.
+2. **Sync SQLAlchemy + psycopg**, not async -- one session style shared
+   identically by the API and the Phase 8 RQ workers (RQ is inherently
+   sync), rather than maintaining both an async ORM path and a separate
+   sync one for the worker anyway.
+3. **Empty migration for Phase 6.** The full section 4 data model is
+   *not* created yet -- nothing in this phase reads or writes a table.
+   The first migration (`72f6e03cec88`) is a genuine no-op, proving the
+   Alembic harness works end to end and giving Phase 7 a real
+   `down_revision` to chain onto. Each later phase adds its own tables in
+   its own migration, when its own code first needs them.
+4. **New dependencies approved**: `fastapi`, `uvicorn[standard]`,
+   `sqlalchemy>=2`, `alembic`, `pydantic-settings`, `psycopg[binary]` --
+   all in a new `service` extra (`pip install -e ".[service]"`), not the
+   base install, so the engine/CLI stays lightweight. `httpx2` was also
+   added (dev-only) after `httpx` printed a hard deprecation warning
+   against the installed `starlette`/FastAPI versions -- newer than
+   expected, not pinned before now.
+
+Shipped: `src/rivet_service/` (`main.py` app factory, `config.py`
+pydantic-settings, `db/` sync engine+session+Alembic harness, `api/`
+with a consistent error envelope and one ported endpoint,
+`POST /api/v1/generate` -- same behavior as the Flask version, just
+FastAPI/Pydantic-validated, no persistence or auth yet). `/healthz`
+(liveness only) and `/readyz` (pings Postgres, returns 503 when
+unreachable). `docker-compose.yml` stands up all 5 services from section
+10 (api, worker, postgres, redis, minio) even though jobs/storage don't
+exist until Phase 8 -- the worker container runs an explicit placeholder
+rather than pretending to process jobs. CI gained a second job
+(`service-test`): a single-Python-version run (3.12, not the full engine
+matrix -- FastAPI/SQLAlchemy compatibility across 3.10-3.12 isn't what
+that job is for) with a real `postgres:16` service container, running
+migrations, the new `tests/service/` suite, and a Docker image build.
+
+`tests/service/` skips cleanly (not fails) when no `DATABASE_URL` is
+reachable, so a contributor running the plain engine suite locally with
+no Postgres running still sees a fully green `pytest -q` -- verified
+directly, including with Postgres stopped entirely.
+
+Not verified: `docker compose up` end to end -- Docker isn't available
+in the environment this phase was built in. The Dockerfile and compose
+file were reviewed carefully and CI now builds the image, but nobody has
+actually run the full local compose stack yet.
+
 ---
 
 ## 5. Things to decide before you start

@@ -37,6 +37,25 @@ python scripts/run_dev_server.py
 # -> http://127.0.0.1:5000
 ```
 
+### Service layer (optional, `src/rivet_service/`)
+
+The SaaS build-out (`docs/saas-buildout.md`) lives in a separate package
+with its own dependency extra, so plain engine/CLI contributors never
+need it:
+
+```bash
+pip install -e ".[dev,service]"
+createdb rivet   # any local Postgres works; docker-compose.yml has one too
+export DATABASE_URL=postgresql+psycopg://localhost/rivet
+alembic -c alembic.ini upgrade head
+uvicorn rivet_service.main:app --reload
+```
+
+Or via Docker (`docker compose up`, then `docker compose run --rm api
+alembic upgrade head` once). `tests/service/` needs a reachable
+`DATABASE_URL` and skips cleanly (not fails) without one, so `pytest -q`
+stays green with no Postgres running at all.
+
 ## Project layout
 
 See [`docs/architecture.md`](docs/architecture.md) for how a request flows
@@ -51,6 +70,9 @@ through the system. In short:
 - `src/rivet/api/` and `web/` — the Flask API and its thin HTML/CSS/JS client.
 - `src/rivet/cli.py` — scriptable entry point, also useful as a fast
   smoke test of the whole pipeline.
+- `src/rivet_service/` — the SaaS service layer (FastAPI, Postgres,
+  auth, billing -- `docs/saas-buildout.md`). Depends on `rivet.core`/
+  `render`/`export`; nothing in those three ever imports back from here.
 
 ## Where contributions are most useful
 

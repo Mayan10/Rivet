@@ -36,6 +36,20 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.4.0",
+    # starlette.testclient (FastAPI's TestClient) has moved to httpx2;
+    # plain httpx now prints a deprecation warning on every import.
+    "httpx2>=2.0.0",
+]
+# The SaaS service layer (src/rivet_service/) -- kept out of the base
+# install so `pip install -e .` (engine + CLI) stays lightweight, per
+# README's "no heavy dependencies" claim. See docs/saas-buildout.md.
+service = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "pydantic-settings>=2.2.0",
+    "psycopg[binary]>=3.1.0",
 ]
 
 [project.scripts]

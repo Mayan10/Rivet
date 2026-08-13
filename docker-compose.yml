@@ -1,0 +1,75 @@
+# Local dev only. `docker compose up` should need no cloud account
+# (docs/saas-buildout.md section 10). Redis and MinIO aren't used by any
+# code yet (Phase 8: jobs and storage) -- they're stood up now because
+# Phase 6's goal line asks for "docker-compose with all services", so the
+# full topology exists from the start rather than growing ad hoc later.
+#
+# Migrations are a deliberate, separate step -- never run them from a
+# container's own entrypoint (two containers booting at once would race
+# to apply them). After the first `docker compose up`, run:
+#   docker compose run --rm api alembic upgrade head
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rivet
+      POSTGRES_PASSWORD: rivet
+      POSTGRES_DB: rivet
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rivet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: rivet
+      MINIO_ROOT_PASSWORD: rivet-dev-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  api:
+    build: .
+    command: ["uvicorn", "rivet_service.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://rivet:rivet@postgres:5432/rivet
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build: .
+    # Placeholder until Phase 8 (RQ worker + job tasks) exists -- kept as
+    # a real, separate service now so the topology doesn't change later,
+    # rather than pretending to run jobs that don't exist yet.
+    command: ["python", "-c", "print('worker: no jobs defined yet, see Phase 8'); import time; time.sleep(1e9)"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://rivet:rivet@postgres:5432/rivet
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  minio_data:
