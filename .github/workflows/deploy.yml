@@ -1,0 +1,46 @@
+name: Build and push image
+
+# Manual only (workflow_dispatch), not on every push to main -- unlike
+# ci.yml, this needs real AWS credentials (an OIDC role, configured as
+# the AWS_DEPLOY_ROLE_ARN repo secret -- see docs/runbook.md) that don't
+# exist in this repo yet. Running it before that secret is set will fail
+# at the "Configure AWS credentials" step; it's deliberately not wired
+# into ci.yml's push trigger so that failure never blocks a normal PR/push.
+#
+# This job only builds and pushes to ECR. Applying the Terraform plan,
+# running the migrate task, and rolling the ECS services are separate,
+# deliberately manual steps (docs/runbook.md) -- not automated here.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write # OIDC -- no long-lived AWS access keys stored in this repo
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Log in to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          REPOSITORY: rivet-service
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$REGISTRY/$REPOSITORY:$IMAGE_TAG" .
+          docker push "$REGISTRY/$REPOSITORY:$IMAGE_TAG"
+          echo "Pushed $REGISTRY/$REPOSITORY:$IMAGE_TAG"
+          echo "Use this as -var container_image=... for the Terraform apply / ECS task definition update (docs/runbook.md)."

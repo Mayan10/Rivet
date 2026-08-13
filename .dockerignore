@@ -12,3 +12,5 @@ web
 output
 *.dxf
 *.png
+deploy
+storage_data

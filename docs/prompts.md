@@ -1122,6 +1122,102 @@ test assumptions changing, same pattern as Phase 9. 306 tests passing
 (219 engine + 87 service). Both fresh-venv install paths reverified
 green with the new dependency installed.
 
+### Phase 12 status
+
+**Status: done (2026-08-13), artifacts unverified against live AWS.**
+This environment has the AWS CLI but no working credentials
+(`aws sts get-caller-identity` fails), so unlike every prior phase,
+nothing here was tested against real infrastructure -- confirmed with
+you up front and scoped accordingly: this phase ships deployment
+artifacts and documentation, not a verified live deploy. Two decisions
+confirmed before writing anything:
+
+1. **Proceed on artifacts-only scope**, explicitly.
+2. **Terraform, not plain ECS task-definition JSON**, for the staging
+   environment -- a real, version-controlled definition of the whole
+   stack, matching "lines up with the SAA cert" (the reason AWS beat
+   Railway/Fly in the first place, section 5). Costs new tooling
+   (Terraform itself, state management) but no new Python runtime
+   dependency.
+
+Shipped:
+
+- **Production `Dockerfile`** (replaces Phase 6's dev-only one): real
+  multi-stage build (a `build-essential` builder stage, a slim final
+  stage with only the installed package), non-root `rivet` user, one
+  image for both entrypoints -- `docker-compose.yml`'s existing
+  `command:` overrides (api vs. worker) still work unchanged, and ECS
+  task definitions (`deploy/terraform/ecs.tf`) select the same way.
+  `alembic.ini`'s `script_location` is a path relative to the working
+  directory, not an importable module, so `src/` is copied into the
+  final stage a second time even though the real installed package
+  already lives in site-packages from the builder stage -- a few
+  hundred KB of redundancy, not worth changing `alembic.ini` to avoid
+  in this phase.
+- **`scripts/release.sh`**: the migration release step (`alembic
+  upgrade head`), meant to run as a one-off ECS task from the same
+  image, never from the api/worker containers' own startup path
+  (section 10: "two containers booting at once would race"). Baked into
+  the image (`COPY scripts ./scripts` in the `Dockerfile`) -- caught and
+  fixed a real bug here: `.dockerignore` originally excluded `scripts/`
+  entirely, which would have made the migrate ECS task definition
+  reference a file that doesn't exist in the built image.
+- **`scripts/smoke_test.sh`**: plain `curl`, no Python dependency
+  (needs to run from a bare CI/deploy runner) -- `/healthz`, `/readyz`,
+  and a full `POST /api/v1/generate` round trip (unauthenticated,
+  synchronous, no DB writes -- the one generation endpoint safe to hit
+  post-deploy without creating real data). **Actually run and verified**
+  against a local `uvicorn` instance (both the pass case and an
+  intentional-404 fail case, confirming it exits non-zero with a useful
+  diagnostic) -- the one piece of this phase that could be tested for
+  real, so it was.
+- **`deploy/terraform/`**: VPC (public/private subnets across 2 AZs, one
+  NAT gateway -- a deliberate cost/availability tradeoff for staging,
+  called out in a comment for whoever adds a production module instance
+  later), RDS Postgres, ElastiCache Redis, S3 artifact bucket (private,
+  encrypted, a 365-day backstop lifecycle rule -- not per-plan retention
+  enforcement, which needs a future scheduled-cleanup phase to read
+  `Entitlements.history_retention_days`), ECR repository, Secrets
+  Manager entries (`DATABASE_URL`/`SECRET_KEY` fully Terraform-managed;
+  Stripe keys created as `REPLACE_ME` placeholders with
+  `ignore_changes` so a real value set via `aws secretsmanager
+  put-secret-value` survives future `apply` runs -- real secret values
+  never go in `.tfvars`, which is exactly what `ci.yml`'s `secret-scan`
+  job exists to catch), ECS Fargate cluster with api/worker services
+  and a separate non-service `migrate` task definition, an ALB
+  (HTTP-only until a real `certificate_arn` is supplied -- `config.py`'s
+  `cookie_secure` setting requires HTTPS to work at all, called out as a
+  "never leave production this way" comment), and IAM roles scoped
+  narrowly (execution role reads only the four secrets above; task role
+  gets only S3 access to the artifacts bucket, nothing broader).
+- **`.github/workflows/deploy.yml`**: builds and pushes to ECR via
+  GitHub OIDC (no long-lived AWS access keys stored as repo secrets).
+  `workflow_dispatch` only, deliberately not wired into `ci.yml`'s push
+  trigger -- it needs an `AWS_DEPLOY_ROLE_ARN` repo secret that doesn't
+  exist yet, and would otherwise fail on every push once merged.
+- **`docs/runbook.md`**: one-time setup (state bucket + lock table, OIDC
+  role, first apply, populating the Stripe secrets), the deploy sequence
+  (build/push, apply, run the migrate task, confirm services stabilized,
+  smoke test), rollback (task-definition revisions), common incident
+  checks (readyz, CloudWatch logs with the Phase 11 request id,
+  ECS service events, worker health), and how to add a production
+  environment later (a second module instance with its own state file,
+  not an `if environment == "production"` branch bolted onto this one).
+
+Verification performed without live AWS: `terraform` itself could not be
+installed in this session (the Homebrew download stalled indefinitely on
+this sandbox's network -- abandoned after several minutes rather than
+blocking further); in its place, every `.tf` file was checked
+programmatically for balanced braces/brackets, and every `aws_*.name`/
+`random_*.name`/`var.*`/`local.*` reference was cross-checked against
+its declaration (no typos found) -- real but partial verification,
+explicitly not a substitute for `terraform validate`/`plan`, which
+`docs/runbook.md` tells the next person (with working credentials and a
+working `terraform` install) to run before the first `apply`. No Python
+code changed in this phase; the full 306-test suite and `ruff` were
+re-run anyway to confirm the Dockerfile/CI changes didn't touch
+anything they shouldn't have.
+
 ---
 
 ## 5. Things to decide before you start
