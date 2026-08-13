@@ -95,6 +95,29 @@ the same explicit seed. Fixed by using an insertion-ordered `dict` instead
 collection to anything in the search hot path, prefer `list`/`dict` over
 `set` unless you're certain nothing downstream depends on iteration order.
 
+**Known limit, found 2026-08-13 via a CI failure on Python 3.11 (passing on
+3.12/3.13) for one specific seed + room program**: this guarantee holds
+per Python build, not across different ones. `random.Random`'s own output
+(`.random()`, `.sample()`, `.shuffle()`) is bit-identical across the
+3.10–3.13 range checked, but `_anneal`'s accept/reject step
+(`rng.random() < math.exp(-delta / temperature)`) calls `math.exp()`,
+which delegates to the platform's C library and isn't guaranteed
+bit-identical across interpreter builds. A ~1-ULP difference there is
+usually harmless, but 400 iterations × several restarts gives it room to
+compound into a genuinely different search trajectory -- observed
+concretely: two Python versions landed on different `bool` outcomes for
+whether a *marginal* request (right at the edge of the reachability hard
+constraint) was feasible at all. Comfortably-feasible requests are
+unaffected; a request sitting exactly on a feasibility boundary can, in
+principle, come back valid on one Python build and `InfeasibleResult` on
+another for the identical seed. No fix has been attempted -- removing the
+sensitivity would mean changing the acceptance rule itself (a search-
+algorithm change, so per CLAUDE.md that needs sign-off first) -- so for
+now, avoid asserting feasibility for a request sitting exactly on a
+margin; give it more candidates/pool size or more slack instead (see
+`tests/test_api.py::test_generate_with_vastu_enabled_returns_preferences`
+for the pattern).
+
 ## Vastu (`core/vastu.py`, Phase 5)
 
 An optional, disabled-by-default soft scoring module plugged directly
