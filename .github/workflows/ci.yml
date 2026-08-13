@@ -66,11 +66,17 @@ jobs:
           --health-retries 10
       # GitHub Actions service containers can't override the image's
       # command, and the official minio/minio image needs `server /data`
-      # passed explicitly -- bitnami/minio's default CMD already does
+      # passed explicitly -- bitnami's minio default CMD already does
       # that, reading MINIO_ROOT_USER/MINIO_ROOT_PASSWORD from env, which
       # is why this is a different image than docker-compose.yml's.
+      # bitnami/minio:latest 404s as of this writing -- Bitnami moved
+      # their free-tier images to bitnamilegacy/* with pinned tags only,
+      # no `latest`. Pin a real, currently-active tag rather than
+      # guessing another one blind; check
+      # https://hub.docker.com/r/bitnamilegacy/minio/tags if this 404s
+      # again later.
       minio:
-        image: bitnami/minio:latest
+        image: bitnamilegacy/minio:2025.7.23-debian-12-r5
         env:
           MINIO_ROOT_USER: rivet
           MINIO_ROOT_PASSWORD: rivet-dev-secret
