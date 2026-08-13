@@ -5,7 +5,9 @@ def test_me_requires_authentication(client):
 
 
 def test_me_reflects_session_auth(client):
-    client.post("/api/v1/auth/register", json={"email": "me-test@example.com", "password": "hunter22222"})
+    client.post(
+        "/api/v1/auth/register", json={"email": "me-test@example.com", "password": "hunter22222", "accept_tos": True}
+    )
     res = client.get("/api/v1/me")
     assert res.status_code == 200
     body = res.json()

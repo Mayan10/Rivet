@@ -14,11 +14,13 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as DbSession
 
+from ...auth.csrf import CSRF_COOKIE_NAME, issue_csrf_cookie
 from ...auth.dependencies import resolve_org_for_user
 from ...auth.passwords import hash_password, verify_password
 from ...auth.sessions import (
@@ -41,6 +43,12 @@ class RegisterIn(BaseModel):
     email: str
     password: str = Field(min_length=8)
     org_name: str | None = None
+    # Literal[True], not bool -- accept_tos=false fails the same
+    # validation-error path as omitting the field entirely, rather than
+    # needing a separate check in the route body (docs/saas-buildout.md
+    # section 12: "accepted at signup with a stored timestamp and
+    # version").
+    accept_tos: Literal[True]
 
 
 class LoginIn(BaseModel):
@@ -96,7 +104,12 @@ def register(payload: RegisterIn, response: Response, db: DbSession = Depends(ge
     if db.query(User).filter_by(email=email).first() is not None:
         raise ApiError("validation_failed", "An account with this email already exists.")
 
-    user = User(email=email, password_hash=hash_password(payload.password))
+    user = User(
+        email=email,
+        password_hash=hash_password(payload.password),
+        tos_accepted_at=datetime.now(timezone.utc),
+        tos_version=get_settings().tos_version,
+    )
     db.add(user)
     db.flush()  # assign user.id before the org/membership rows reference it
 
@@ -118,6 +131,7 @@ def register(payload: RegisterIn, response: Response, db: DbSession = Depends(ge
 
     session_token = create_session(db, user.id, ttl_days=settings.session_ttl_days)
     _set_session_cookie(response, session_token)
+    issue_csrf_cookie(response)
 
     return {"user": _user_dict(user), "org": _org_dict(org)}
 
@@ -134,6 +148,7 @@ def login(payload: LoginIn, response: Response, db: DbSession = Depends(get_db))
     settings = get_settings()
     session_token = create_session(db, user.id, ttl_days=settings.session_ttl_days)
     _set_session_cookie(response, session_token)
+    issue_csrf_cookie(response)
 
     org, _role = resolve_org_for_user(db, user)
     return {"user": _user_dict(user), "org": _org_dict(org)}
@@ -145,6 +160,7 @@ def logout(request: Request, response: Response, db: DbSession = Depends(get_db)
     if token:
         revoke_session(db, token)
     response.delete_cookie(SESSION_COOKIE_NAME)
+    response.delete_cookie(CSRF_COOKIE_NAME)
     return {"status": "ok"}
 
 

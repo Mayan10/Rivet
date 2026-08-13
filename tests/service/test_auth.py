@@ -1,7 +1,7 @@
 from rivet_service.auth.tokens import generate_token
 from rivet_service.config import get_settings
 
-VALID_REGISTER = {"email": "auth-test@example.com", "password": "hunter22222"}
+VALID_REGISTER = {"email": "auth-test@example.com", "password": "hunter22222", "accept_tos": True}
 
 
 def _issue_token(user_id: str, purpose: str, ttl_seconds: int = 3600) -> str:
@@ -19,15 +19,48 @@ def test_register_creates_user_org_membership_and_session(client):
 
 
 def test_register_email_is_case_insensitive_for_uniqueness(client):
-    client.post("/api/v1/auth/register", json={"email": "Case@Example.com", "password": "hunter22222"})
-    res = client.post("/api/v1/auth/register", json={"email": "case@example.com", "password": "hunter22222"})
+    client.post("/api/v1/auth/register", json={"email": "Case@Example.com", "password": "hunter22222", "accept_tos": True})
+    res = client.post("/api/v1/auth/register", json={"email": "case@example.com", "password": "hunter22222", "accept_tos": True})
     assert res.status_code == 400
     assert res.json()["error"]["code"] == "validation_failed"
 
 
 def test_register_rejects_short_password(client):
-    res = client.post("/api/v1/auth/register", json={"email": "short@example.com", "password": "short"})
+    res = client.post(
+        "/api/v1/auth/register", json={"email": "short@example.com", "password": "short", "accept_tos": True}
+    )
     assert res.status_code == 400
+
+
+def test_register_requires_accepting_tos(client):
+    res = client.post("/api/v1/auth/register", json={"email": "no-tos@example.com", "password": "hunter22222"})
+    assert res.status_code == 400
+    assert res.json()["error"]["code"] == "validation_failed"
+
+    res_false = client.post(
+        "/api/v1/auth/register",
+        json={"email": "no-tos@example.com", "password": "hunter22222", "accept_tos": False},
+    )
+    assert res_false.status_code == 400
+
+
+def test_register_records_tos_acceptance_version_and_timestamp(client):
+    from rivet_service.config import get_settings
+    from rivet_service.db.models import User
+    from rivet_service.db.session import SessionLocal
+
+    res = client.post("/api/v1/auth/register", json=VALID_REGISTER)
+    user_id = res.json()["user"]["id"]
+
+    db = SessionLocal()
+    try:
+        import uuid
+
+        user = db.get(User, uuid.UUID(user_id))
+        assert user.tos_accepted_at is not None
+        assert user.tos_version == get_settings().tos_version
+    finally:
+        db.close()
 
 
 def test_login_succeeds_with_correct_credentials(client):

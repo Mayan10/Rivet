@@ -1,4 +1,4 @@
-VALID_REGISTER = {"email": "projects-test@example.com", "password": "hunter22222"}
+VALID_REGISTER = {"email": "projects-test@example.com", "password": "hunter22222", "accept_tos": True}
 
 
 def test_create_and_list_projects(client):
@@ -18,7 +18,9 @@ def test_get_project_requires_ownership(client):
     project_id = client.post("/api/v1/projects", json={"name": "Mine"}).json()["id"]
 
     client.cookies.clear()
-    client.post("/api/v1/auth/register", json={"email": "someone-else@example.com", "password": "hunter22222"})
+    client.post(
+        "/api/v1/auth/register", json={"email": "someone-else@example.com", "password": "hunter22222", "accept_tos": True}
+    )
     res = client.get(f"/api/v1/projects/{project_id}")
     assert res.status_code == 404  # not 403 -- don't reveal it exists in another org
 

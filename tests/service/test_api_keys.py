@@ -1,4 +1,4 @@
-VALID_REGISTER = {"email": "keys-test@example.com", "password": "hunter22222"}
+VALID_REGISTER = {"email": "keys-test@example.com", "password": "hunter22222", "accept_tos": True}
 
 
 def _register_studio_org(client) -> None:

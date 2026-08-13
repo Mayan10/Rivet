@@ -70,6 +70,14 @@ def create_portal_session(*, customer_id: str) -> stripe.billing_portal.Session:
     )
 
 
+def cancel_subscription(subscription_id: str) -> None:
+    get_stripe_client().v1.subscriptions.cancel(subscription_id)
+
+
+def delete_customer(customer_id: str) -> None:
+    get_stripe_client().v1.customers.delete(customer_id)
+
+
 def construct_webhook_event(*, payload: bytes, signature_header: str) -> stripe.Event:
     """Raises ``stripe.SignatureVerificationError`` on a bad/missing
     signature -- the caller (api/v1/billing.py) turns that into a 400, not

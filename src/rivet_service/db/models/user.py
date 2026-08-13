@@ -20,5 +20,13 @@ class User(Base):
     email: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(nullable=False)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Phase 11: recorded at registration (required -- see api/v1/auth.py's
+    # RegisterIn.accept_tos). tos_version is a free-text snapshot of
+    # whatever config.Settings.tos_version was at acceptance time, not a
+    # foreign key to a documents table -- there's no such table, and
+    # re-prompting existing users when the version bumps isn't built yet
+    # (see docs/saas-buildout.md section 12).
+    tos_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tos_version: Mapped[str | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

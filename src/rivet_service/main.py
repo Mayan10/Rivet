@@ -10,17 +10,41 @@ killed and restarted for no reason.
 
 from __future__ import annotations
 
+import sentry_sdk
 from fastapi import FastAPI, Response
+from fastapi.middleware.cors import CORSMiddleware
 
 from .api.errors import register_error_handlers
 from .api.v1 import router as v1_router
 from .config import get_settings
 from .db.session import database_is_reachable
+from .logging_config import configure_logging
+from .middleware.request_id import RequestIdMiddleware
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging()
+
+    if settings.sentry_dsn:
+        # No-op (not even imported meaningfully) when unset -- no real
+        # Sentry project is required for the rest of the service to work.
+        sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.env, send_default_pii=False)
+
     app = FastAPI(title=settings.app_name)
+
+    # Order matters: Starlette runs middleware in reverse of add order,
+    # so RequestIdMiddleware (added last) is outermost and sees every
+    # request first -- CORS's own preflight handling and every log line
+    # from here down get a request id.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins_list,  # no wildcard (section 11) -- explicit origins only
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app.add_middleware(RequestIdMiddleware)
 
     register_error_handlers(app)
     app.include_router(v1_router)

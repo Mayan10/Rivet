@@ -1014,6 +1014,114 @@ and a successful checkout persists `stripe_customer_id` on first use.
 292 tests passing (219 engine + 73 service). Both fresh-venv install
 paths reverified green with the new dependency installed.
 
+### Phase 11 status
+
+**Status: done (2026-08-13).** Four decisions confirmed before writing
+code:
+
+1. **`sentry-sdk` approved** as a new runtime dependency (official,
+   actively maintained; hand-rolling error capture is real surface for
+   something whose whole job is being reliable). `SENTRY_DSN` unset by
+   default -- `sentry_sdk.init()` is skipped entirely in `main.py` when
+   it's None, no real Sentry project required for the rest of the
+   service to work.
+2. **Account deletion**: leaves the org intact unless the requester is
+   its last member; a sole owner with other members still present is
+   blocked (409 `owner_transfer_required`) rather than either silently
+   nuking teammates' data or silently doing nothing. No
+   ownership-transfer endpoint exists yet, so that edge case is
+   human-resolved for now.
+3. **`CORS_ALLOWED_ORIGINS` defaults to `http://localhost:3000`** (no
+   wildcard, per section 11) -- no frontend is deployed anywhere yet; an
+   operator sets the real production origin(s) via env var once one
+   exists.
+4. **`tos_version` defaults to `"unreleased-draft"`.** The acceptance
+   *mechanism* (versioned timestamp on `User`, `accept_tos` required at
+   registration) is fully built and tested; the actual ToS/Privacy
+   Policy text is explicitly out of scope here -- section 12: "I am not
+   a lawyer... get an actual lawyer to review the ToS before you take
+   the first payment." Swap in a real version string once that exists.
+
+Shipped, roughly in section-11 order:
+
+- **Structured JSON logs + request id** (`logging_config.py`,
+  `middleware/request_id.py`): a `ContextVar` set once per request by
+  the outermost middleware, read back by a `logging.Formatter` subclass
+  -- every log line during a request carries its id without call sites
+  passing it explicitly. Reuses an inbound `X-Request-ID` header when a
+  caller already set one (pure correlation, never used for
+  authorization, so trusting an arbitrary inbound value is fine).
+- **CORS** (`main.py`): `CORSMiddleware` locked to
+  `cors_allowed_origins_list` (comma-separated env var, not JSON --
+  nobody should need to shell-quote an array by hand), credentials
+  allowed, no wildcard.
+- **CSRF** (`auth/csrf.py`): double-submit cookie. A second,
+  non-httpOnly `rivet_csrf` cookie is issued alongside the session
+  cookie at register/login; state-changing requests must echo its value
+  back in an `X-CSRF-Token` header, checked with `hmac.compare_digest`.
+  A no-op for GET/HEAD/OPTIONS and for API-key auth (header-based, not
+  cookie-based -- nothing for CSRF to exploit there), so the dependency
+  is applied uniformly across every router without route-by-route
+  judgment calls. **Test ergonomics, not enforcement, were relaxed**:
+  rather than hand-editing the ~90 pre-existing mutating call sites
+  across the suite, `tests/service/conftest.py`'s `client` fixture
+  (`_AutoCsrfTestClient`) auto-attaches the header from the cookie
+  whenever a caller hasn't already set one explicitly -- the real
+  production check still runs, for real, on every test request; only
+  `test_csrf.py` overrides the header to exercise rejection.
+- **Rate limiting** (`rate_limit.py`): Redis fixed-window (`INCR` +
+  `EXPIRE`), reusing Phase 8's existing Redis connection -- no new
+  infrastructure. IP-keyed when unauthenticated, org-keyed when
+  authenticated (one dependency, `enforce_rate_limit`, branches on
+  whether `current_context` resolved an org). Fails open (allows the
+  request, logs a warning) if Redis itself is unreachable -- an abuse
+  mitigation degrading is an acceptable trade against a Redis blip
+  taking the whole API down. Client IP comes straight off the ASGI
+  connection, not `X-Forwarded-For` -- there's no reverse proxy in front
+  of this service in any environment that exists yet; whoever adds one
+  (Phase 12) needs to revisit this alongside picking a trusted-proxy
+  header, since blindly trusting an inbound `X-Forwarded-For` today
+  would let anyone claim any IP and dodge the limit entirely.
+- **Input clamps**: already fully enforced by Phase 9's
+  `api/validation.py` (absolute ceilings + plan clamping before
+  enqueue) -- nothing new needed here, just confirmed still correct.
+- **Presigned URLs**: already 300 seconds (Phase 8) -- already compliant.
+- **Secrets from environment only**: already true (`config.py` is the
+  only thing reading `os.environ`) -- what Phase 11 *added* is a CI
+  check that fails on committed secrets: `gitleaks/gitleaks-action@v2`,
+  a new `secret-scan` job in `ci.yml`. A GitHub Action, not a Python
+  dependency, so it never touches `pyproject.toml`. Verified locally
+  (`brew install gitleaks && gitleaks detect` against both the working
+  tree and full git history) before relying on CI to catch it --
+  confirmed the fake test-mode Stripe values in `conftest.py`
+  (`sk_test_fake_for_tests` etc.) don't false-positive.
+- **Account deletion** (`DELETE /api/v1/me` in `api/v1/me.py`): explicit,
+  ordered deletion in one function, not DB-level `ON DELETE CASCADE`
+  rules spread across migrations -- same reasoning as
+  `generations.py`'s `delete_generation`, and it meant no schema
+  migration was needed for this at all. Stripe cleanup (cancel any
+  non-canceled `Subscription` rows, delete the customer) runs *before*
+  any DB row is touched, so a Stripe-side failure leaves the database
+  completely unchanged rather than half-deleted.
+- **ToS acceptance** (migration `2babde093fcb`:
+  `users.tos_accepted_at`, `users.tos_version`; `RegisterIn.accept_tos:
+  Literal[True]` in `api/v1/auth.py`): `Literal[True]` rather than
+  `bool` -- `accept_tos: false` fails the same validation-error path as
+  omitting the field, no separate check needed in the route body.
+
+New test files: `test_rate_limit.py`, `test_csrf.py`,
+`test_account_deletion.py`, plus new cases in `test_auth.py` (ToS
+required, version/timestamp recorded). Added an `override_settings`
+fixture (`conftest.py`) -- the first time a test needed to change a
+`config.Settings` value mid-suite; it sets env vars, clears
+`get_settings()`'s process-wide `lru_cache`, and clears it again on
+teardown so a later test doesn't inherit a stale cached `Settings`
+object. Every pre-existing test calling `/auth/register` needed
+`accept_tos: True` added -- the expected ripple from a earlier phase's
+test assumptions changing, same pattern as Phase 9. 306 tests passing
+(219 engine + 87 service). Both fresh-venv install paths reverified
+green with the new dependency installed.
+
 ---
 
 ## 5. Things to decide before you start

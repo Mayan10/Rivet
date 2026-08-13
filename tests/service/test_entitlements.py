@@ -16,7 +16,7 @@ from rivet_service.billing.entitlements import (
 from rivet_service.db.models import Organization, UsageEvent
 from rivet_service.db.session import SessionLocal
 
-VALID_REGISTER = {"email": "entitlements-test@example.com", "password": "hunter22222"}
+VALID_REGISTER = {"email": "entitlements-test@example.com", "password": "hunter22222", "accept_tos": True}
 
 
 def _register_org(client) -> uuid.UUID:

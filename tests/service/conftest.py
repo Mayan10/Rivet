@@ -104,9 +104,50 @@ def _clean_service_state():
     yield
 
 
+class _AutoCsrfTestClient(TestClient):
+    """Phase 11 added CSRF enforcement (auth/csrf.py) on cookie-authenticated
+    state-changing requests -- a real security check, not something tests
+    should bypass. But ~90 pre-existing call sites across this suite
+    predate it and were never written to attach the header. Rather than
+    hand-edit every one, this auto-attaches ``X-CSRF-Token`` from the
+    ``rivet_csrf`` cookie (set by register/login) whenever the caller
+    hasn't already set that header -- the real production check still
+    runs on every request, comparing a real cookie against a real header,
+    it's just populated automatically here instead of by hand.
+    ``test_csrf.py`` overrides or omits the header explicitly to test
+    rejection, which this only fills in when absent.
+    """
+
+    def request(self, method, url, *, headers=None, **kwargs):
+        headers = dict(headers or {})
+        if not any(k.lower() == "x-csrf-token" for k in headers) and "rivet_csrf" in self.cookies:
+            headers["X-CSRF-Token"] = self.cookies["rivet_csrf"]
+        return super().request(method, url, headers=headers, **kwargs)
+
+
 @pytest.fixture
 def client():
-    return TestClient(create_app())
+    return _AutoCsrfTestClient(create_app())
+
+
+@pytest.fixture
+def override_settings(monkeypatch):
+    """Yields a function(**env_vars) that sets env vars and clears
+    get_settings()'s LRU cache so the change is visible immediately.
+    Clears the cache again on teardown (after monkeypatch has already
+    restored the original env vars) so a later test re-reads real
+    defaults instead of inheriting this test's cached Settings object --
+    get_settings() is process-wide, not per-test.
+    """
+    from rivet_service.config import get_settings
+
+    def _apply(**env_vars) -> None:
+        for key, value in env_vars.items():
+            monkeypatch.setenv(key, str(value))
+        get_settings.cache_clear()
+
+    yield _apply
+    get_settings.cache_clear()
 
 
 def redis_is_reachable() -> bool:

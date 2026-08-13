@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DbSession
 
+from ...auth.csrf import enforce_csrf
 from ...auth.dependencies import RequestContext, require_context
 from ...billing.stripe_client import (
     StripeNotConfigured,
@@ -27,9 +28,11 @@ from ...billing.stripe_client import (
 from ...billing.webhooks import handle_webhook_event
 from ...db.models import Plan
 from ...db.session import get_db
+from ...rate_limit import enforce_rate_limit
 from ..errors import ApiError
 
 router = APIRouter(tags=["billing"])
+_guarded = [Depends(enforce_rate_limit), Depends(enforce_csrf)]
 
 
 class CheckoutSessionIn(BaseModel):
@@ -41,7 +44,7 @@ def _require_user_org(context: RequestContext) -> None:
         raise ApiError("unauthorized", "Billing actions require a signed-in user.", status_code=401)
 
 
-@router.post("/billing/checkout-session")
+@router.post("/billing/checkout-session", dependencies=_guarded)
 def checkout_session(
     payload: CheckoutSessionIn, context: RequestContext = Depends(require_context), db: DbSession = Depends(get_db)
 ) -> dict:
@@ -68,7 +71,7 @@ def checkout_session(
     return {"checkout_url": session.url}
 
 
-@router.post("/billing/portal-session")
+@router.post("/billing/portal-session", dependencies=_guarded)
 def portal_session(context: RequestContext = Depends(require_context)) -> dict:
     _require_user_org(context)
 

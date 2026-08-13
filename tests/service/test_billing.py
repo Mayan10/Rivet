@@ -24,7 +24,9 @@ VALID_REGISTER = {"email": "billing-test@example.com", "password": "hunter22222"
 
 
 def _register_org(client, *, email: str = VALID_REGISTER["email"]) -> uuid.UUID:
-    res = client.post("/api/v1/auth/register", json={"email": email, "password": "hunter22222"})
+    res = client.post(
+        "/api/v1/auth/register", json={"email": email, "password": "hunter22222", "accept_tos": True}
+    )
     return uuid.UUID(res.json()["org"]["id"])
 
 

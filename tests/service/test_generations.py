@@ -52,7 +52,7 @@ def _create_project(client, *, email: str = VALID_REGISTER["email"]) -> str:
     from rivet_service.db.models import Organization
     from rivet_service.db.session import SessionLocal
 
-    res = client.post("/api/v1/auth/register", json={"email": email, "password": "hunter22222"})
+    res = client.post("/api/v1/auth/register", json={"email": email, "password": "hunter22222", "accept_tos": True})
     org_id = res.json()["org"]["id"]
 
     db = SessionLocal()
@@ -87,7 +87,7 @@ def test_create_generation_rejects_invalid_payload_without_queueing(client):
 def test_create_generation_requires_project_ownership(client):
     project_id = _create_project(client)
     client.cookies.clear()
-    client.post("/api/v1/auth/register", json={"email": "other-org@example.com", "password": "hunter22222"})
+    client.post("/api/v1/auth/register", json={"email": "other-org@example.com", "password": "hunter22222", "accept_tos": True})
     res = client.post(f"/api/v1/projects/{project_id}/generations", json=VALID_GENERATE_PAYLOAD)
     assert res.status_code == 404
 
@@ -194,7 +194,7 @@ def test_free_tier_clamps_num_candidates_to_plan_limit(client):
     # Default free plan: max_candidates == 1 (billing/plans.py). Asking
     # for 2 shouldn't fail the request -- it's a graceful degradation,
     # not a rejection (api/validation.py's clamp_to_entitlements).
-    client.post("/api/v1/auth/register", json={"email": "free-clamp@example.com", "password": "hunter22222"})
+    client.post("/api/v1/auth/register", json={"email": "free-clamp@example.com", "password": "hunter22222", "accept_tos": True})
     project_id = client.post("/api/v1/projects", json={"name": "Free Project"}).json()["id"]
 
     res = client.post(f"/api/v1/projects/{project_id}/generations", json=VALID_GENERATE_PAYLOAD)
@@ -208,7 +208,7 @@ def test_free_tier_clamps_num_candidates_to_plan_limit(client):
 
 
 def test_free_tier_dxf_download_requires_plan_upgrade(client):
-    client.post("/api/v1/auth/register", json={"email": "free-dxf@example.com", "password": "hunter22222"})
+    client.post("/api/v1/auth/register", json={"email": "free-dxf@example.com", "password": "hunter22222", "accept_tos": True})
     project_id = client.post("/api/v1/projects", json={"name": "Free Project"}).json()["id"]
     gen_id = client.post(f"/api/v1/projects/{project_id}/generations", json=VALID_GENERATE_PAYLOAD).json()[
         "generation_id"
@@ -225,7 +225,7 @@ def test_free_tier_dxf_download_requires_plan_upgrade(client):
 
 
 def test_free_tier_artifacts_are_watermarked(client):
-    client.post("/api/v1/auth/register", json={"email": "free-watermark@example.com", "password": "hunter22222"})
+    client.post("/api/v1/auth/register", json={"email": "free-watermark@example.com", "password": "hunter22222", "accept_tos": True})
     project_id = client.post("/api/v1/projects", json={"name": "Free Project"}).json()["id"]
     gen_id = client.post(f"/api/v1/projects/{project_id}/generations", json=VALID_GENERATE_PAYLOAD).json()[
         "generation_id"
@@ -239,7 +239,7 @@ def test_free_tier_artifacts_are_watermarked(client):
 
 def test_quota_exceeded_after_monthly_limit(client):
     # Free plan: monthly_generations == 5 (billing/plans.py).
-    client.post("/api/v1/auth/register", json={"email": "free-quota@example.com", "password": "hunter22222"})
+    client.post("/api/v1/auth/register", json={"email": "free-quota@example.com", "password": "hunter22222", "accept_tos": True})
     project_id = client.post("/api/v1/projects", json={"name": "Free Project"}).json()["id"]
 
     for _ in range(5):

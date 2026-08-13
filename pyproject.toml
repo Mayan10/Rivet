@@ -55,6 +55,7 @@ service = [
     "redis>=5.0.0",
     "boto3>=1.34.0",
     "stripe>=11.0.0",
+    "sentry-sdk[fastapi]>=2.0.0",
 ]
 
 [project.scripts]

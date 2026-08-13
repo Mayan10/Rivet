@@ -4,7 +4,7 @@ docs/saas-buildout.md section 3). Nothing outside this module reads
 ``os.getenv`` call somewhere else.
 
 Auth settings were added in Phase 7; jobs/storage settings in Phase 8;
-billing settings in Phase 10.
+billing settings in Phase 10; hardening settings in Phase 11.
 """
 
 from __future__ import annotations
@@ -80,6 +80,39 @@ class Settings(BaseSettings):
     billing_checkout_success_url: str = "http://localhost:3000/billing/success"
     billing_checkout_cancel_url: str = "http://localhost:3000/billing/cancel"
     billing_portal_return_url: str = "http://localhost:3000/billing"
+
+    # Phase 11 (hardening).
+
+    # Comma-separated, not JSON -- an operator setting an env var by hand
+    # shouldn't need to think about shell-quoting a JSON array. No
+    # frontend is deployed anywhere yet (built separately, per section 9);
+    # this default is a local dev server's origin, not a production one.
+    cors_allowed_origins: str = "http://localhost:3000"
+
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    # None by default, same as the Stripe keys -- sentry_sdk.init() is
+    # skipped entirely in main.py when unset, so no real Sentry project
+    # is required for the rest of the service to work.
+    sentry_dsn: str | None = None
+
+    # Fixed-window counters in Redis (rate_limit.py). Deliberately simple
+    # (INCR + EXPIRE, not a sliding window or token bucket) -- easy to
+    # reason about and debug, which matters more here than smoothing
+    # burst traffic at the edges of a window. Defaults are a starting
+    # point, not a researched number; tune once real traffic exists.
+    rate_limit_window_seconds: int = 60
+    rate_limit_unauthenticated_max: int = 30  # per IP
+    rate_limit_authenticated_max: int = 120  # per org
+
+    # Stored on every user at registration (auth/register requires
+    # accept_tos=true). "unreleased-draft" until a lawyer-reviewed ToS
+    # and Privacy Policy exist -- see docs/saas-buildout.md section 12.
+    # Bump this string (and re-prompt existing users to re-accept, not
+    # built yet) the day a real version ships.
+    tos_version: str = "unreleased-draft"
 
 
 @lru_cache
