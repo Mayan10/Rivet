@@ -36,6 +36,27 @@ except ImportError:
 if not database_is_reachable():
     pytest.skip("No reachable DATABASE_URL configured -- skipping service tests.", allow_module_level=True)
 
+from sqlalchemy import text  # only importable once the try/except above has succeeded
+
+
+@pytest.fixture(autouse=True)
+def _clean_auth_tables():
+    """Phase 7 tables persist across test runs in the shared dev/CI
+    Postgres (no per-test transaction rollback -- routes commit their own
+    sessions), so wipe them before every test rather than relying on
+    unique-per-test data to avoid collisions.
+    """
+    from rivet_service.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        for table in ("sessions", "api_keys", "memberships", "organizations", "users"):
+            db.execute(text(f"DELETE FROM {table}"))
+        db.commit()
+    finally:
+        db.close()
+    yield
+
 
 @pytest.fixture
 def client():

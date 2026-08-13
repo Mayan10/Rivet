@@ -7,11 +7,7 @@ from sqlalchemy import engine_from_config, pool
 
 from rivet_service.config import get_settings
 from rivet_service.db.base import Base
-
-# Import every model module here so Base.metadata is fully populated for
-# autogenerate -- empty in Phase 6 on purpose (db/base.py), each later
-# phase adds its own `from rivet_service.db.models import ...` line here
-# when it adds real tables.
+from rivet_service.db.models import *  # populates Base.metadata for autogenerate
 
 config = context.config
 

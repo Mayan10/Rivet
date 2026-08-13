@@ -699,6 +699,72 @@ in the environment this phase was built in. The Dockerfile and compose
 file were reviewed carefully and CI now builds the image, but nobody has
 actually run the full local compose stack yet.
 
+### Phase 7 status
+
+**Status: done (2026-08-13).** Four decisions confirmed before writing
+code (per CLAUDE.md's rule for anything touching auth, and the phase
+template):
+
+1. **A `sessions` table, even though section 4 doesn't list one.**
+   Section 5 requires a real session token, and `POST /auth/logout` (a
+   named endpoint) needs something to revoke -- a stateless signed
+   cookie can't be truly invalidated before its own expiry without
+   reinventing this table as a blocklist anyway. `sessions.token_hash`
+   stores a hash of a random opaque token (`secrets.token_urlsafe`), not
+   a signed value -- the DB row is the source of truth, the same pattern
+   `api_keys.key_hash` already used.
+2. **Hand-rolled HMAC for email-verification/password-reset tokens**
+   (`auth/tokens.py`), not a new `itsdangerous` dependency -- a small,
+   well-understood ~70-line pattern (base64url payload + HMAC-SHA256
+   signature + expiry), reusing the same `secret_key` sessions don't need.
+3. **No email provider wired up.** `/auth/verify-email` and
+   `/auth/request-password-reset` generate real tokens and log the
+   value server-side (never in the HTTP response body -- a worse leak
+   surface than a real email would be); nothing sends an actual email.
+   Picking a provider (SES, SendGrid, ...) is a distinct decision
+   deferred to whenever that's actually wanted.
+4. **`argon2-cffi` approved** (section 11 names Argon2id explicitly;
+   there's no stdlib alternative). Added to the `service` extra.
+
+Shipped: `db/models/` (User, Organization, Membership, ApiKey, Session)
+and their migration (`e977392f7403`, chained onto Phase 6's empty one;
+creates the `citext` extension for case-insensitive email); `auth/`
+(`passwords.py` argon2id, `tokens.py` signed tokens, `sessions.py`,
+`api_keys.py`, `dependencies.py`); and the routes from section 9's API
+surface table: `/auth/register|login|logout|verify-email|
+request-password-reset|reset-password`, `/me`, `/api-keys` (list/create/
+revoke).
+
+`current_context`/`require_context` (`auth/dependencies.py`) is the one
+shared resolution point every protected route depends on, exactly as
+section 5 asks -- session cookie or `Authorization: Bearer rvt_live_...`,
+resolved identically. It returns `(user, org, role, auth_method)` rather
+than the spec's literal `(user, org, entitlements)`, since Entitlements
+doesn't exist until Phase 9; that phase adds a field here, not a
+call-site rewrite at every route. API-key auth resolves an `org` with no
+`user` (keys are org-scoped, not user-scoped) -- creating a *new* key
+still requires session auth specifically, since `api_keys.created_by` is
+a real user reference an API key doesn't have. Every user starts solo
+per section 4; there's no org-switching/invite flow anywhere in the
+7-phase plan, so `current_context` resolves a user's first membership as
+their org context. Password reset revokes every existing session for
+that user, not just the one that requested it. Login and registration
+return the identical generic message for "no such user" and "wrong
+password" (section 5), and `/auth/request-password-reset` always returns
+200 regardless of whether the account exists -- neither is an
+enumeration oracle.
+
+Not implemented (explicitly out of scope per the phase table, not
+overlooked): rate limiting on login/register/reset (Phase 11), CSRF
+protection on cookie-authenticated routes (Phase 11), API key paid-tier
+gating (Phase 9, no entitlements yet).
+
+`tests/service/conftest.py` gained a `_clean_auth_tables` autouse
+fixture -- Phase 7's tests commit real rows to the shared dev/CI
+Postgres (no per-test transaction rollback, since routes commit their
+own sessions), so tables are wiped before every test rather than relying
+on unique-per-test data. 249 tests passing (219 engine + 30 service).
+
 ---
 
 ## 5. Things to decide before you start

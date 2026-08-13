@@ -51,6 +51,12 @@ alembic -c alembic.ini upgrade head
 uvicorn rivet_service.main:app --reload
 ```
 
+`SECRET_KEY` (signs email-verification/password-reset tokens, see
+`config.py`) has a dev-only default -- fine locally, must be overridden
+anywhere real. Email verification and password reset don't send real
+email yet (no provider is wired up -- Phase 7 status in
+`docs/prompts.md`); the token is logged server-side instead.
+
 Or via Docker (`docker compose up`, then `docker compose run --rm api
 alembic upgrade head` once). `tests/service/` needs a reachable
 `DATABASE_URL` and skips cleanly (not fails) without one, so `pytest -q`

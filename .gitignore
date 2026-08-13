@@ -34,14 +34,6 @@ env/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Project specific
-models/
-data/
-exps/
-checkpoints/
-temp/
-*.npy
-*.pth
 *.pt
 *.ckpt
 
