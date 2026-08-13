@@ -28,6 +28,13 @@ class Organization(Base):
     # migrates this into the subscriptions table's plan_code without
     # anyone's entitlements silently changing.
     plan_code: Mapped[str] = mapped_column(ForeignKey("plans.code"), nullable=False, server_default="free")
+    # Phase 10: set the first time a checkout session is created for this
+    # org, then reused on every later checkout/portal call. Lives here
+    # (not only on `subscriptions`, which section 4 lists it on) because a
+    # Stripe customer can exist before any subscription does -- e.g.
+    # someone opens Checkout and abandons it -- and a subscriptions-only
+    # column can't hold a value for a row that doesn't exist yet.
+    stripe_customer_id: Mapped[str | None] = mapped_column(unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

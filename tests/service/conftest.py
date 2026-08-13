@@ -35,6 +35,14 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
 _TEST_STORAGE_DIR = tempfile.mkdtemp(prefix="rivet-test-storage-")
 os.environ.setdefault("STORAGE_LOCAL_DIR", _TEST_STORAGE_DIR)
 
+# Phase 10: fake but well-formed test-mode-shaped values -- no real
+# Stripe account is ever contacted in tests (checkout/portal session
+# creation is mocked at the SDK boundary; webhook tests build real
+# locally-signed payloads against this same secret instead of hitting
+# the network). See tests/service/test_billing.py's module docstring.
+os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_fake_for_tests")
+os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_test_fake_for_tests")
+
 try:
     from fastapi.testclient import TestClient
 
@@ -60,6 +68,8 @@ _DB_TABLES = (
     "projects",
     "sessions",
     "api_keys",
+    "billing_events",
+    "subscriptions",
     "memberships",
     "organizations",
     "users",

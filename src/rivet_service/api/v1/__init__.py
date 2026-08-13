@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from .api_keys import router as api_keys_router
 from .auth import router as auth_router
+from .billing import router as billing_router
 from .generate import router as generate_router
 from .generations import router as generations_router
 from .local_artifacts import router as local_artifacts_router
@@ -16,3 +17,4 @@ router.include_router(api_keys_router)
 router.include_router(projects_router)
 router.include_router(generations_router)
 router.include_router(local_artifacts_router)
+router.include_router(billing_router)

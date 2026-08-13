@@ -5,18 +5,21 @@ and so callers can just do ``from rivet_service.db.models import User``.
 
 from .api_key import ApiKey
 from .artifact import Artifact
+from .billing_event import BillingEvent
 from .candidate import Candidate
 from .generation import Generation, GenerationStatus
 from .organization import Membership, MembershipRole, Organization
 from .plan import Plan
 from .project import Project
 from .session import Session
+from .subscription import Subscription
 from .usage_event import UsageEvent
 from .user import User
 
 __all__ = [
     "ApiKey",
     "Artifact",
+    "BillingEvent",
     "Candidate",
     "Generation",
     "GenerationStatus",
@@ -26,6 +29,7 @@ __all__ = [
     "Plan",
     "Project",
     "Session",
+    "Subscription",
     "UsageEvent",
     "User",
 ]

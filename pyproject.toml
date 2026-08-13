@@ -54,6 +54,7 @@ service = [
     "rq>=1.16.0",
     "redis>=5.0.0",
     "boto3>=1.34.0",
+    "stripe>=11.0.0",
 ]
 
 [project.scripts]

@@ -3,8 +3,8 @@ docs/saas-buildout.md section 3). Nothing outside this module reads
 ``os.environ`` directly -- new settings get a field here, not an ad hoc
 ``os.getenv`` call somewhere else.
 
-Billing keys are still Phase 10. Auth settings were added in Phase 7;
-jobs/storage settings in Phase 8.
+Auth settings were added in Phase 7; jobs/storage settings in Phase 8;
+billing settings in Phase 10.
 """
 
 from __future__ import annotations
@@ -60,6 +60,26 @@ class Settings(BaseSettings):
     s3_access_key: str | None = None
     s3_secret_key: str | None = None
     s3_region: str = "us-east-1"
+
+    # Phase 10 (billing). None by default -- billing routes raise a clear
+    # 503 rather than a confusing Stripe SDK error if these are unset
+    # (see api/v1/billing.py), so `docker compose up` doesn't need a real
+    # Stripe account for the rest of the service to work.
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+    # No stripe_price_id_* settings here -- Plan.provider_price_id (the
+    # `plans` table) is the one place a plan code maps to a Stripe price,
+    # same reasoning as billing/entitlements.py: "limits live here, not
+    # scattered through if plan == 'pro' branches." An operator sets it
+    # per-plan (a real Stripe Price id) once a real Stripe account exists;
+    # NULL until then, and the checkout route raises a clear 503 for a
+    # plan that isn't priced yet rather than silently using the wrong id.
+
+    # Where Stripe redirects the browser after Checkout/the Customer
+    # Portal -- the frontend's own routes, not this API's.
+    billing_checkout_success_url: str = "http://localhost:3000/billing/success"
+    billing_checkout_cancel_url: str = "http://localhost:3000/billing/cancel"
+    billing_portal_return_url: str = "http://localhost:3000/billing"
 
 
 @lru_cache

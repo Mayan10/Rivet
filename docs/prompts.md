@@ -932,6 +932,88 @@ Both fresh-venv install paths (`.[dev]` alone, `.[dev,service]`)
 reverified green, including the engine-only path's clean skip of
 `tests/service` with no Postgres/service-extra present.
 
+### Phase 10 status
+
+**Status: done (2026-08-13).** Three decisions confirmed before writing
+code (provider itself -- Stripe Checkout + Customer Portal, USD -- was
+already decided 2026-08-12, section 5 above):
+
+1. **New dependency approved**: `stripe` (the official SDK; no
+   maintained alternative does signed-webhook verification safely without
+   hand-rolling HMAC comparison).
+2. **Built test-driven against mocked Stripe**, no real test-mode account
+   used this phase. Checkout/portal session creation mock
+   `billing/stripe_client.py`'s two `create_*` functions at the route
+   boundary; webhook signature verification and idempotency are tested
+   for real, using `stripe.WebhookSignature.generate_signature_header`
+   (the same helper Stripe's own SDK test suite uses) to build an
+   actually-valid signed payload against a fake `STRIPE_WEBHOOK_SECRET`,
+   with no network call. Real credentials (`STRIPE_SECRET_KEY`,
+   `STRIPE_WEBHOOK_SECRET`, and each `Plan.provider_price_id`) are unset
+   in every environment so far -- an operator sets them when a real
+   Stripe account exists; the checkout route already degrades to a clear
+   503/400 rather than a confusing SDK error until then.
+3. **`organizations.stripe_customer_id` added**, not just
+   `subscriptions.provider_customer_id` (section 4 only lists the
+   latter) -- a Stripe customer can exist before any subscription row
+   does (checkout created, not yet completed), and reusing the same
+   customer on a retried checkout avoids creating a duplicate one in
+   Stripe for every abandoned attempt.
+
+Shipped: `db/models/{subscription,billing_event}.py` and migration
+`744cc09416ce` (explicit constraint names throughout, same fix Phase 9's
+migration needed for the same autogenerate gap); `billing/stripe_client.py`
+(the only module that imports `stripe` -- a provider swap touches one
+file); `billing/webhooks.py` (idempotent dispatch: insert into
+`billing_events` on `provider_event_id`, `IntegrityError` on the
+conflict means already-processed, 200 and stop); `api/v1/billing.py`
+(`POST /billing/checkout-session`, `POST /billing/portal-session` --
+both session-auth-only, same reasoning as Phase 7's API-key creation;
+`POST /webhooks/stripe`, unauthenticated except for its own signature
+check).
+
+Webhook dispatch listens to `customer.subscription.{created,updated,
+deleted}` only, not `checkout.session.completed` -- Stripe fires a
+subscription event immediately after a subscription-mode Checkout
+completes, already carrying the full Subscription object (status, price,
+period bounds), where `checkout.session.completed` doesn't without an
+extra re-fetch call. `.deleted` reuses the same upsert as
+`.created`/`.updated`, since Stripe already sets `status="canceled"` on
+the object by the time `.deleted` fires -- nothing delete-specific to
+write. `_ENTITLED_STATUSES = {"trialing", "active"}`; every other status
+(`past_due`, `canceled`, `unpaid`, `incomplete`, ...) degrades
+`organizations.plan_code` to `"free"` without touching the `subscriptions`
+row's own `status` -- "past_due should degrade to free-tier limits, not
+hard-lock the account" (section 8), generalized to the whole
+non-entitled set, with the real status kept for the UI to explain why.
+`entitlements_for` (Phase 9) is unchanged -- still reads
+`organizations.plan_code` directly; this phase's job is only keeping
+that column in sync with what Stripe says is true.
+
+One bug found while writing the webhook tests, not anticipated in
+advance: `stripe.StripeObject` implements `__getitem__` but not `.get()`
+(unlike a real dict), so `sub.get("metadata", {})` raised
+`AttributeError: get` on every real (non-mocked) event object. Fixed by
+converting the whole subscription object to a plain dict via
+`.to_dict()` once at the top of `_upsert_subscription`, before any field
+access -- also makes the function trivially testable with plain-dict
+fixtures instead of needing `stripe.StripeObject.construct_from(...)`
+everywhere.
+
+New test file `test_billing.py` (11 tests): invalid signature rejected,
+a subscription upgrade syncs `organizations.plan_code`, duplicate event
+delivery is a genuine no-op (verified by mutating the org's plan
+in-between two deliveries of the *same* event id and asserting the
+second delivery doesn't touch it), `past_due` degrades the org without
+deleting the `subscriptions` row, `.deleted` degrades to free, an
+unmapped Stripe price raises and leaves no `billing_events` row (so
+Stripe's automatic retry can reprocess it once `Plan.provider_price_id`
+is fixed), checkout/portal require session auth (not just an API key,
+mirroring Phase 7's key-creation test), an unpriced plan is rejected,
+and a successful checkout persists `stripe_customer_id` on first use.
+292 tests passing (219 engine + 73 service). Both fresh-venv install
+paths reverified green with the new dependency installed.
+
 ---
 
 ## 5. Things to decide before you start
