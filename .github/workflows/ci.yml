@@ -33,7 +33,7 @@ jobs:
 
       - name: CLI smoke test
         run: |
-          rivet generate --width 12 --length 15 \
+          rivet generate --width 15 --length 13 \
             --room living_room --room master_bedroom+ensuite \
             --room bedroom:2+ensuite --room kitchen --room dining_room \
             --room bathroom --seed 1 --out-dir /tmp/rivet-ci-out

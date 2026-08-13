@@ -24,7 +24,7 @@ Try the CLI end-to-end (also a fast way to sanity-check a change to the
 engine without spinning up the web server):
 
 ```bash
-rivet generate --width 12 --length 15 \
+rivet generate --width 15 --length 13 \
   --room living_room --room master_bedroom+ensuite \
   --room bedroom:2+ensuite --room kitchen --room dining_room --room bathroom \
   --seed 1 --out-dir /tmp/rivet-dev
