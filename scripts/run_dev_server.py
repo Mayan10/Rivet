@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from rivet.api.app import create_app  # noqa: E402
+from rivet.api.app import create_app
 
 
 def main() -> None:

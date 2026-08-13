@@ -95,6 +95,24 @@ the same explicit seed. Fixed by using an insertion-ordered `dict` instead
 collection to anything in the search hot path, prefer `list`/`dict` over
 `set` unless you're certain nothing downstream depends on iteration order.
 
+## DXF export (`export/dxf/`, Phase 4)
+
+A package, not a single module: `units.py` (the one place metres become
+millimetres), `layers.py` (AIA CAD Layer Guidelines names by default,
+`layer_scheme="legacy"` for the pre-Phase-4 names), `blocks.py`
+(BLOCK/INSERT/ATTDEF for doors, windows, north arrow, and schematic
+fixtures), `walls_geometry.py` (true wall-boundary polylines + masonry
+hatch), `dimensions.py` (overall + per-room chains, `DIMSCALE` tied to a
+fixed 1:100 print scale), `sheet.py` (a paper-space `Sheet` layout with a
+scale-locked viewport, title block, and door/window/room schedules read
+from `core/metrics.py`), and `core.py` (orchestrates the above into
+`build_document`/`export_dxf`/`export_dxf_bytes`, the same public names
+the module exported before the rewrite). Title block metadata
+(project/client/date/sheet/revision) is an export-time keyword argument
+(`TitleBlockInfo`), not a `GenerationRequest`/`Layout` field — core stays
+unaware of anything document-metadata-shaped, per CLAUDE.md's layer
+separation rule.
+
 ## Why no dataset, no ML model
 
 The original prototype (see `CHANGELOG.md`) matched user requirements

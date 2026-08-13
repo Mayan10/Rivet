@@ -416,6 +416,77 @@ case that currently fails.
 
 ### Phase 4: DXF export overhaul
 
+**Status: done (2026-08-13).** Targeted the installed ezdxf 1.4.4 API
+(stable since ~1.0/1.1 for everything this phase needed, so the
+`ezdxf>=1.1.0` pin didn't change). `src/rivet/export/dxf.py` became a
+package (`src/rivet/export/dxf/`: `core.py`, `units.py`, `layers.py`,
+`blocks.py`, `walls_geometry.py`, `dimensions.py`, `sheet.py`) — the
+public import path (`from rivet.export.dxf import export_dxf`) is
+unchanged. All 8 items shipped:
+
+1. Millimetre coordinates (`$INSUNITS=4`); every conversion happens once,
+   in `units.py`, at the point a coordinate is written into an ezdxf
+   call — core/render stay in metres, untouched.
+2-3. BLOCK/INSERT for doors, windows, north arrow, title block, and
+   schematic sanitary/kitchen fixtures, with ATTDEF/ATTRIB
+   (TAG/TYPE/WIDTH_MM/HEIGHT_MM/ROOM) on doors and windows. One
+   definition per type; doors/windows scale and rotate per instance
+   (rotation + mirrored y-scale from a single canonical quarter-circle
+   block — only 4 discrete orientations are possible, see
+   `blocks.py::_DOOR_ORIENTATION`).
+4. Per-room dimension chains added alongside the existing overall
+   width/length dimensions, rescaled for millimetres with a dedicated
+   `RIVET` dimstyle (`DIMSCALE` tied to the fixed 1:100 print scale).
+5. Masonry hatch (`ANSI31`, ezdxf's built-in pattern — no external `.pat`
+   file needed) on true rectangular wall-boundary polylines (not the old
+   `const_width` centerline trick), with per-layer lineweights (heaviest
+   on cut walls, lightest on annotation).
+6. AIA CAD Layer Guidelines names (`A-WALL-EXTR`, `A-DOOR`, `A-GLAZ`,
+   ...) are now the **default** layer scheme; the original names are
+   still selectable via `layer_scheme="legacy"`.
+7. A paper-space `Sheet` layout with a viewport locked at 1:100
+   (`VSF_LOCK_ZOOM`), sized to exactly fit the plot rather than a named
+   ISO sheet (every sheet is generated per-request, so there's no fixed
+   physical target to round to). Title block metadata (project/client/
+   date/sheet/revision) are new **export-time keyword arguments**
+   (`TitleBlockInfo`), never threaded into `GenerationRequest` or
+   `Layout` — matches CLAUDE.md's rule that core/ never knows about
+   anything service- or user-facing. The disclaimer text is baked into
+   the block as static MTEXT (genuinely fixed, not a per-drawing value),
+   not an ATTRIB.
+8. Door/window/room schedules are drawn as plain paper-space TEXT rows
+   sourced from `core/metrics.py`'s `LayoutMetrics` at export time, not
+   FIELD entities (which don't recalculate outside AutoCAD, per the
+   phase's own instruction).
+
+Fixture placement is explicitly schematic (one representative block per
+relevant room at a fixed anchor point) — this codebase has no
+wall-adjacency-aware fixture-layout algorithm, and building one is a
+substantially larger feature than the block/attribute plumbing this phase
+is actually about. Flagged and confirmed with the user before
+implementing, along with the layer-scheme default and title-block
+metadata questions above.
+
+`tests/test_dxf_export.py` was rewritten for all of the phase's own
+testing requirements (round-tripped through `ezdxf.readfile`/`ezdxf.read`
+for every assertion): block definitions exist, INSERT count matches
+door/window count, every wall boundary polyline is closed, layers exist
+with the right color/lineweight ordering, `$INSUNITS` is set, dimension
+geometry was generated, the paper-space layout and locked viewport exist,
+schedules reflect `LayoutMetrics`, and a golden-file entity-type-census
+test (`tests/fixtures/dxf_golden_census.json`, regenerate deliberately
+with `scripts/regenerate_dxf_golden.py`) guards against unintended
+structural regressions. 187 tests passing.
+
+One honest finding, not fixed: raw DXF bytes are not byte-identical
+across repeated exports of the *same* `Layout` -- but only in 4 lines out
+of ~33,900 (two ezdxf-generated header GUIDs and two save timestamps),
+never geometry or entity content. This is standard DXF file hygiene (real
+CAD tools regenerate these on every save too), not a violation of
+CLAUDE.md's determinism contract, which is about the search/layout result
+being reproducible -- and it is, verified directly by the golden-file
+entity-census test using a fixed seed.
+
 ```
 Read CLAUDE.md. Implement Phase 4 only. Read the ezdxf documentation before
 you start and tell me which version's API you are targeting.

@@ -42,10 +42,14 @@ the room program you give it.
 - **Self-rendering** — PNG and SVG renderers draw the generated geometry
   directly (walls, door swings, window breaks, dimensions, north arrow,
   title block). No external imagery anywhere in the path.
-- **Real CAD export** — DXF output with proper layers (`WALLS-EXTERIOR`,
-  `WALLS-INTERIOR`, `DOORS`, `WINDOWS`, `TEXT`, `DIMENSIONS`, `ROOMS`), true
-  wall thickness, and openings correctly cut out of wall geometry — not a
-  soup of unlabeled traced line segments.
+- **Real CAD export** — millimetre-coordinate DXF with AIA CAD Layer
+  Guidelines layers, BLOCK/INSERT symbols with ATTDEF/ATTRIB (doors,
+  windows, fixtures, north arrow, title block) so AutoCAD DATAEXTRACTION
+  can build a schedule from the file, masonry hatch on true wall
+  boundaries, per-room dimension chains, and a paper-space sheet with a
+  scale-locked viewport, title block, and door/window/room schedules —
+  not a soup of unlabeled traced line segments. See
+  [`docs/architecture.md`](docs/architecture.md).
 - **CLI, API, and web UI** — script it, integrate it, or just use the form.
 - **Lightweight** — no ML framework, no GPU, no system dependencies like
   Graphviz or Tesseract. `pip install -e .` and go.

@@ -29,7 +29,7 @@ class WindowSymbol:
     thickness: float
 
 
-def _along_into(op: Opening, layout: Layout) -> tuple[Point, Point]:
+def along_into(op: Opening, layout: Layout) -> tuple[Point, Point]:
     room = layout.room(op.room_id)
     rect = room.rect
 
@@ -50,7 +50,7 @@ def _along_into(op: Opening, layout: Layout) -> tuple[Point, Point]:
 
 
 def door_symbol(op: Opening, layout: Layout, thickness: float, n_arc: int = 10) -> DoorSymbol:
-    along, into = _along_into(op, layout)
+    along, into = along_into(op, layout)
     hinge: Point = (op.x, op.y)
     hinge_end: Point = (op.x + along[0] * op.width, op.y + along[1] * op.width)
     leaf_end: Point = (hinge[0] + into[0] * op.width, hinge[1] + into[1] * op.width)
