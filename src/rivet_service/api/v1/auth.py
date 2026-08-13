@@ -111,7 +111,7 @@ def register(payload: RegisterIn, response: Response, db: DbSession = Depends(ge
     verify_token_value = generate_token(
         settings.secret_key,
         purpose="email_verify",
-        user_id=str(user.id),
+        subject=str(user.id),
         ttl_seconds=settings.email_verification_token_ttl_hours * 3600,
     )
     logger.info("Email verification token for %s (no email provider configured): %s", email, verify_token_value)
@@ -173,7 +173,7 @@ def request_password_reset(payload: RequestPasswordResetIn, db: DbSession = Depe
         reset_token = generate_token(
             settings.secret_key,
             purpose="password_reset",
-            user_id=str(user.id),
+            subject=str(user.id),
             ttl_seconds=settings.password_reset_token_ttl_hours * 3600,
         )
         logger.info("Password reset token for %s (no email provider configured): %s", email, reset_token)

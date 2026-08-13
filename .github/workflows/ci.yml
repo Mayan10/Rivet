@@ -55,8 +55,35 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      # GitHub Actions service containers can't override the image's
+      # command, and the official minio/minio image needs `server /data`
+      # passed explicitly -- bitnami/minio's default CMD already does
+      # that, reading MINIO_ROOT_USER/MINIO_ROOT_PASSWORD from env, which
+      # is why this is a different image than docker-compose.yml's.
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: rivet
+          MINIO_ROOT_PASSWORD: rivet-dev-secret
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://rivet:rivet@localhost:5432/rivet
+      REDIS_URL: redis://localhost:6379/15
 
     steps:
       - uses: actions/checkout@v4

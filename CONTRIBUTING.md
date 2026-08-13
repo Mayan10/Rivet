@@ -57,6 +57,19 @@ anywhere real. Email verification and password reset don't send real
 email yet (no provider is wired up -- Phase 7 status in
 `docs/prompts.md`); the token is logged server-side instead.
 
+Generations run as background jobs (Phase 8), so testing that path also
+needs Redis, and the default storage backend is local disk (no extra
+setup) -- S3 needs MinIO or real AWS S3:
+
+```bash
+brew install redis && brew services start redis   # or docker compose up redis
+python -m rivet_service.jobs.worker                # separate terminal, consumes the queue
+```
+
+`tests/service/` skips whatever infra isn't reachable (Postgres, Redis,
+MinIO each independently) rather than failing -- see
+`tests/service/conftest.py`.
+
 Or via Docker (`docker compose up`, then `docker compose run --rm api
 alembic upgrade head` once). `tests/service/` needs a reachable
 `DATABASE_URL` and skips cleanly (not fails) without one, so `pytest -q`

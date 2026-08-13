@@ -5,7 +5,7 @@ VALID_REGISTER = {"email": "auth-test@example.com", "password": "hunter22222"}
 
 
 def _issue_token(user_id: str, purpose: str, ttl_seconds: int = 3600) -> str:
-    return generate_token(get_settings().secret_key, purpose=purpose, user_id=user_id, ttl_seconds=ttl_seconds)
+    return generate_token(get_settings().secret_key, purpose=purpose, subject=user_id, ttl_seconds=ttl_seconds)
 
 
 def test_register_creates_user_org_membership_and_session(client):

@@ -3,13 +3,14 @@ docs/saas-buildout.md section 3). Nothing outside this module reads
 ``os.environ`` directly -- new settings get a field here, not an ad hoc
 ``os.getenv`` call somewhere else.
 
-REDIS_URL and object storage credentials still don't exist yet (Phase 8);
-billing keys are Phase 10. Auth-related settings were added in Phase 7.
+Billing keys are still Phase 10. Auth settings were added in Phase 7;
+jobs/storage settings in Phase 8.
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -35,6 +36,30 @@ class Settings(BaseSettings):
     # Controls the session cookie's Secure flag -- browsers refuse to send
     # `Secure` cookies over plain http://, so local dev needs it off.
     cookie_secure: bool = False
+
+    # Phase 8 (jobs).
+    redis_url: str = "redis://localhost:6379/0"
+    # "A pathological request must die, not pin a worker" (section 6) --
+    # generously above real generation time (well under a second) so it
+    # only ever fires on something actually stuck.
+    job_timeout_seconds: int = 120
+
+    # Phase 8 (storage). "local" needs no cloud account for `docker
+    # compose up` (section 6); "s3" works against real AWS S3 (the
+    # decided deploy target) or MinIO by setting s3_endpoint_url.
+    storage_backend: Literal["local", "s3"] = "local"
+    storage_local_dir: str = "./storage_data"
+    # Used to build signed download URLs for the local backend, which has
+    # no presigned-URL concept of its own -- see storage/local.py.
+    storage_public_base_url: str = "http://localhost:8000"
+    # "Presigned URLs expire in minutes, not hours" (section 11).
+    artifact_url_ttl_seconds: int = 300
+
+    s3_bucket: str = "rivet-artifacts"
+    s3_endpoint_url: str | None = None  # set for MinIO; unset means real AWS
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+    s3_region: str = "us-east-1"
 
 
 @lru_cache

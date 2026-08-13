@@ -46,6 +46,8 @@ Thumbs.db
 .rivet_outputs/
 output/
 *.dxf
+storage_data/
+dump.rdb
 
 # Test / lint caches
 .pytest_cache/

@@ -765,6 +765,80 @@ Postgres (no per-test transaction rollback, since routes commit their
 own sessions), so tables are wiped before every test rather than relying
 on unique-per-test data. 249 tests passing (219 engine + 30 service).
 
+### Phase 8 status
+
+**Status: done (2026-08-13).** Two decisions confirmed before writing
+code:
+
+1. **Corrected `core/version.py`'s drift before wiring it up** --
+   `RULEBOOK_VERSION` 2->3, `ENGINE_VERSION` 1->2. The file (added in
+   Phase 1, unused until now) documents its own policy: bump on any
+   change to `core/rules.py` or the search/scoring/opening-placement
+   algorithm. Phase 3's circulation rewrite and Phase 5's POOJA room rule
+   never bumped it. Phase 8 is the first thing that actually persists
+   these values on every generation, so shipping the known-stale numbers
+   would have defeated the whole "why did my plan come out different"
+   support-debugging point on day one. Two integers changed, not `core/`
+   behavior.
+2. **New dependencies approved**: `rq` + `redis` (section 6 names these
+   specifically), `boto3` (AWS's S3 SDK, works against both real S3 and
+   MinIO via `endpoint_url`). All in the `service` extra.
+
+Shipped: `db/models/{project,generation,candidate,artifact}.py` and
+their migration (`0c23fba685f5`, cascade-deletes candidates/artifacts
+with their parent); `storage/{base,local,s3}.py` behind one
+`StorageAdapter` interface (`get_storage_adapter()` picks by
+`STORAGE_BACKEND`); `jobs/{queue,tasks,worker}.py` (RQ + Redis, a hard
+per-job timeout, `run_generation_job` as a plain importable function so
+tests can call it without a live worker); the full async flow --
+`POST /projects/{id}/generations` (202, enqueues), `GET /generations/{id}`
+(status + candidates + scores, polling), `DELETE /generations/{id}`
+(deletes storage objects first, then cascades the DB rows),
+`GET .../candidates/{n}/download?format=` (returns a JSON
+`{"download_url": ...}`, not a redirect); and full `projects` CRUD.
+No quota/entitlement check yet (Phase 9) and no watermarking (also
+Phase 9) -- same "defer to the phase that actually owns this" pattern
+Phase 7 used for API-key paid-tier gating.
+
+The local storage backend has no native presigned-URL concept, so it
+fakes one: `storage/local.py` reuses `auth/tokens.py`'s signed-token
+mechanism (renamed `user_id` -> `subject` for this second, more general
+use) to build a URL that routes back through a new
+`GET /local-artifacts/{token}` endpoint rather than exposing a raw file
+path -- keeps the `StorageAdapter` interface, and "stays private until
+presigned," identical for both backends. Artifact storage keys are
+`generations/{id}/{uuid}.{kind}` -- the id-prefix is only for a human
+skimming a bucket listing, the actual key component is a fresh UUID,
+never guessable or sequential (section 6).
+
+Verified directly against real local infrastructure, not just reviewed:
+Postgres, Redis, and MinIO all installed and run locally for this phase
+(none were available for Phase 6's Docker pieces). Confirmed empirically,
+not assumed: the full project -> generation -> real-RQ-worker -> S3(MinIO)
+-> presigned-URL -> actual-fetch -> delete round trip, for both storage
+backends. One local-machine-only wrinkle found and worked around in
+tests (not shipped in production code): `boto3` triggers a macOS
+Objective-C fork-safety crash inside RQ's default forking `Worker` --
+irrelevant on Linux (CI/production), and side-stepped in tests entirely
+by using RQ's non-forking `SimpleWorker` there instead (faster and more
+deterministic for tests regardless of platform).
+
+`tests/service/conftest.py`'s cleanup fixture was renamed
+`_clean_service_state` and extended: it now also flushes a dedicated
+Redis DB index (`.../15`, distinct from the dev default `.../0`, so
+`pytest -q` never shares queue state with a developer's own
+`docker compose up`) and resets a fresh temp directory for local
+storage, alongside the existing Postgres table wipe. `docker-compose.yml`'s
+`worker` service now runs the real entrypoint (`python -m
+rivet_service.jobs.worker`) instead of Phase 6's placeholder, and `api`/
+`worker` share one `STORAGE_BACKEND=s3` (pointed at the `minio` service)
+environment block via a YAML anchor so the two can't drift. CI's
+`service-test` job gained `redis` and a `minio` (via the `bitnami/minio`
+image specifically -- GitHub Actions service containers can't override a
+command, and the official `minio/minio` image needs one) service
+container alongside Postgres. 271 tests passing (219 engine + 52
+service).
+
 ---
 
 ## 5. Things to decide before you start
