@@ -7,9 +7,17 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-display: var(--font-fraunces);
+  --font-heading: var(--font-fraunces);
+
+  /* Brand accent (terracotta / clay) exposed as Tailwind color utilities. */
+  --color-clay: var(--clay);
+  --color-clay-foreground: var(--clay-foreground);
+  --color-blueprint: var(--blueprint);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,92 +47,161 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ---- Light: warm drafting paper ---------------------------------------- */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.5rem;
+
+  --background: oklch(0.965 0.008 85);
+  --foreground: oklch(0.22 0.012 60);
+  --card: oklch(0.985 0.006 85);
+  --card-foreground: oklch(0.22 0.012 60);
+  --popover: oklch(0.985 0.006 85);
+  --popover-foreground: oklch(0.22 0.012 60);
+
+  --primary: oklch(0.24 0.012 60);
+  --primary-foreground: oklch(0.965 0.008 85);
+  --secondary: oklch(0.925 0.012 82);
+  --secondary-foreground: oklch(0.28 0.012 60);
+  --muted: oklch(0.925 0.012 82);
+  --muted-foreground: oklch(0.52 0.014 65);
+  --accent: oklch(0.925 0.012 82);
+  --accent-foreground: oklch(0.28 0.012 60);
+  --destructive: oklch(0.55 0.2 27);
+
+  --border: oklch(0.88 0.014 80);
+  --input: oklch(0.88 0.014 80);
+  --ring: oklch(0.58 0.13 45);
+
+  /* clay / terracotta */
+  --clay: oklch(0.58 0.13 45);
+  --clay-foreground: oklch(0.985 0.006 85);
+  --blueprint: oklch(0.55 0.02 60);
+
+  --chart-1: oklch(0.58 0.13 45);
+  --chart-2: oklch(0.5 0.09 60);
+  --chart-3: oklch(0.6 0.05 80);
+  --chart-4: oklch(0.45 0.03 70);
+  --chart-5: oklch(0.35 0.02 65);
+
+  --sidebar: oklch(0.985 0.006 85);
+  --sidebar-foreground: oklch(0.22 0.012 60);
+  --sidebar-primary: oklch(0.24 0.012 60);
+  --sidebar-primary-foreground: oklch(0.965 0.008 85);
+  --sidebar-accent: oklch(0.925 0.012 82);
+  --sidebar-accent-foreground: oklch(0.28 0.012 60);
+  --sidebar-border: oklch(0.88 0.014 80);
+  --sidebar-ring: oklch(0.58 0.13 45);
 }
 
+/* ---- Dark: drafting table --------------------------------------------- */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.19 0.008 70);
+  --foreground: oklch(0.92 0.012 85);
+  --card: oklch(0.23 0.009 70);
+  --card-foreground: oklch(0.92 0.012 85);
+  --popover: oklch(0.23 0.009 70);
+  --popover-foreground: oklch(0.92 0.012 85);
+
+  --primary: oklch(0.92 0.012 85);
+  --primary-foreground: oklch(0.2 0.008 70);
+  --secondary: oklch(0.28 0.01 70);
+  --secondary-foreground: oklch(0.92 0.012 85);
+  --muted: oklch(0.28 0.01 70);
+  --muted-foreground: oklch(0.72 0.014 78);
+  --accent: oklch(0.3 0.012 70);
+  --accent-foreground: oklch(0.92 0.012 85);
+  --destructive: oklch(0.7 0.19 22);
+
+  --border: oklch(0.92 0.012 85 / 12%);
+  --input: oklch(0.92 0.012 85 / 16%);
+  --ring: oklch(0.68 0.14 47);
+
+  --clay: oklch(0.68 0.14 47);
+  --clay-foreground: oklch(0.2 0.008 70);
+  --blueprint: oklch(0.7 0.02 78);
+
+  --chart-1: oklch(0.68 0.14 47);
+  --chart-2: oklch(0.6 0.1 60);
+  --chart-3: oklch(0.7 0.05 80);
+  --chart-4: oklch(0.55 0.03 70);
+  --chart-5: oklch(0.8 0.02 85);
+
+  --sidebar: oklch(0.23 0.009 70);
+  --sidebar-foreground: oklch(0.92 0.012 85);
+  --sidebar-primary: oklch(0.68 0.14 47);
+  --sidebar-primary-foreground: oklch(0.2 0.008 70);
+  --sidebar-accent: oklch(0.3 0.012 70);
+  --sidebar-accent-foreground: oklch(0.92 0.012 85);
+  --sidebar-border: oklch(0.92 0.012 85 / 12%);
+  --sidebar-ring: oklch(0.68 0.14 47);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    @apply font-sans antialiased;
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv01";
   }
-  html {
-    @apply font-sans;
+  ::selection {
+    background: var(--clay);
+    color: var(--clay-foreground);
+  }
+  h1, h2, h3, h4 {
+    @apply font-display;
+    font-optical-sizing: auto;
+  }
+}
+
+@layer components {
+  /* Monospace eyebrow / technical label */
+  .eyebrow {
+    @apply font-mono text-xs uppercase tracking-[0.2em] text-clay;
+  }
+
+  /* Blueprint hairline grid -- drafting-paper texture behind sections */
+  .blueprint-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklch, var(--blueprint) 12%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklch, var(--blueprint) 12%, transparent) 1px, transparent 1px);
+    background-size: 2.5rem 2.5rem;
+    background-position: center;
+  }
+  .blueprint-grid-fade {
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 40%, transparent 100%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 40%, transparent 100%);
+  }
+
+  /* Corner ticks -- little architectural registration marks on a box */
+  .ticked {
+    position: relative;
+  }
+  .ticked::before,
+  .ticked::after {
+    content: "";
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-color: var(--clay);
+  }
+  .ticked::before {
+    top: -1px; left: -1px;
+    border-top: 1.5px solid; border-left: 1.5px solid;
+  }
+  .ticked::after {
+    bottom: -1px; right: -1px;
+    border-bottom: 1.5px solid; border-right: 1.5px solid;
   }
 }
