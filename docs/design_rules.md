@@ -1,7 +1,7 @@
 # Design rules
 
-This is the human-readable version of [`src/rivet/core/rules.py`](../src/rivet/core/rules.py)
-and [`src/rivet/core/validator.py`](../src/rivet/core/validator.py), which
+This is the human-readable version of [`packages/engine/rivet/core/rules.py`](../packages/engine/rivet/core/rules.py)
+and [`packages/engine/rivet/core/validator.py`](../packages/engine/rivet/core/validator.py), which
 are the single source of truth — if this document and the code disagree,
 the code is right and this file needs an update. Raw source extraction
 (page numbers, full clause text) lives in

@@ -15,26 +15,26 @@
         "description": "Authoritative working rules: layer separation, determinism contract, code-citation requirement, hard-vs-soft constraint separation."
       },
       {
-        "scope": ["src/rivet/**"],
+        "scope": ["packages/engine/rivet/**"],
         "path": "docs/architecture.md",
         "description": "Architecture and layer boundaries."
       }
     ],
     "rules": [
       {
-        "scope": ["src/rivet/core/**", "src/rivet/render/**", "src/rivet/export/**"],
+        "scope": ["packages/engine/rivet/core/**", "packages/engine/rivet/render/**", "packages/engine/rivet/export/**"],
         "rule": "Pure library. Must NOT import from rivet_service, touch a database, read environment variables, make network calls, or reference users/orgs/plans/billing. Flag any such import, or any user_id/org_id threaded into the generator."
       },
       {
-        "scope": ["src/rivet/core/**"],
+        "scope": ["packages/engine/rivet/core/**"],
         "rule": "Determinism is a contract: no set() iteration, dict-ordering assumptions, hash() of a string, or unordered parallelism in the search/scoring/ordering path or anything downstream of it. Any change to search, scoring, or ordering must come with a test that runs the same request in two subprocesses and compares output bytes."
       },
       {
-        "scope": ["src/rivet/core/**"],
+        "scope": ["packages/engine/rivet/core/**"],
         "rule": "Building-code minimums are HARD constraints and belong in a validator that rejects a layout, never in the soft penalty score. Any dimensional value taken from a building code must carry a source comment naming the code and clause (e.g. TNCDBR 2019 Rule 52). Flag hardcoded code-derived dimensions with no citation, and any invented code value."
       },
       {
-        "scope": ["src/**/*.py"],
+        "scope": ["packages/engine/**/*.py", "apps/api/**/*.py"],
         "rule": "Public functions need type hints. New modules need tests in the same change. Every schema change goes through an Alembic migration -- no manual DDL, no create_all() outside test fixtures."
       },
       {

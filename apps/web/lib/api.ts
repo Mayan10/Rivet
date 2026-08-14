@@ -1,4 +1,4 @@
-// Thin fetch wrapper for the Rivet backend (FastAPI, src/rivet_service).
+// Thin fetch wrapper for the Rivet backend (FastAPI, apps/api/rivet_service).
 // The backend uses cookie sessions (Phase 7/11), so requests send credentials.
 // Auth flows and typed endpoints get layered on in later phases.
 

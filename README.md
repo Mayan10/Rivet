@@ -163,7 +163,7 @@ export_dxf(layouts[0], "plan.dxf")
 ## Project structure
 
 ```
-src/rivet/
+packages/engine/rivet/
 ├── core/       # generation engine: models, rulebook, graph, layout
 │               # search, scoring, opening placement — no I/O
 ├── render/     # PNG + SVG renderers, driven purely by Layout geometry

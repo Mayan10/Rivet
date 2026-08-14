@@ -1,6 +1,6 @@
 import pytest
-from conftest import assert_feasible
 
+from conftest import assert_feasible
 from rivet.core.generator import compute_buildable_rect, generate
 from rivet.core.metrics import compute_metrics
 from rivet.core.models import (

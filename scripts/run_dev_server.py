@@ -10,7 +10,11 @@ import argparse
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+# Run from a source checkout without installing: the engine lives in
+# packages/engine, the service in apps/api.
+_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_root / "packages" / "engine"))
+sys.path.insert(0, str(_root / "apps" / "api"))
 
 from rivet.api.app import create_app
 

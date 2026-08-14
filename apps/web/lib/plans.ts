@@ -1,4 +1,4 @@
-// Plan tiers for the marketing site. Mirrors src/rivet_service/billing/plans.py
+// Plan tiers for the marketing site. Mirrors apps/api/rivet_service/billing/plans.py
 // (the backend is the source of truth for enforcement); keep the two in sync
 // when tiers change. Prices are the plan definitions, billed via Stripe.
 
