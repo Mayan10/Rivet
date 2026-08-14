@@ -14,17 +14,23 @@ PNG/SVG, and exports DXF. It is being turned into a subscription product.
 
 ## Branch workflow
 
-Two long-lived branches. **Never create a new branch per task** — commit to
-the matching standing branch and open (or update) a PR to `main` from it.
+Three long-lived branches plus short-lived chore branches. **Never open a new
+branch per feature.** Contribute on the branch that matches the area you are
+changing, and work only in that area's folder.
 
-- **`frontend`** — all work under `apps/` (the web frontend).
-- **`backend`** — all work under `src/` (the engine and service layer) **and**
-  all chore, infra, CI, and docs work (anything not under `apps/`).
+- **`main`** — production. Never commit directly; everything lands via PR.
+- **`frontend`** — all work under the frontend app (`apps/web`). Frontend
+  contributors touch only this folder.
+- **`backend`** — all work under `src/` (the engine and service layer).
+  Backend contributors touch only this folder.
+- **`chore/<topic>`** — CI, infra, tooling, docs, and anything that does not
+  change production behaviour. Short-lived; delete after merge.
 
-After a branch's PR merges, fast-forward it to `main` before the next task on
-it. This is a two-person team coordinating who does what by hand, so branches
-are split by area, not by task, and merge conflicts are avoided by agreement
-rather than by branching.
+Open (or update) a PR to `main` from the matching branch. After a PR merges,
+fast-forward its branch to `main` before the next task on it. This is a
+two-person team coordinating who does what by hand, so branches are split by
+area, not by task, and conflicts are avoided by agreement rather than by
+branching.
 
 ## Hard boundaries
 
