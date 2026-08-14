@@ -75,8 +75,15 @@ branching.
 
 ## Style
 - Match existing code style.
-- Type hints on all public functions.
-- New modules get tests in the same commit.
+- **Backend (Python — the engine and service under `src/`):** type hints on
+  all public functions; new modules get tests in the same commit; `pytest`
+  green.
+- **Frontend (`apps/web`):** follow React/Next conventions. Component return
+  types are inferred, not annotated — annotate only non-component utilities
+  (e.g. `lib/` helpers). The regression gate is `next build` (full
+  type-check) + eslint, not unit tests; add tests only for non-trivial
+  frontend logic such as data or utilities, never for presentational
+  components or pages.
 - Explain your plan before writing code for anything touching the search
   algorithm, auth, billing, or the download path. I need to be able to
   debug these without you.
