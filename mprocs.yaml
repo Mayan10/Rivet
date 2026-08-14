@@ -1,0 +1,9 @@
+# `bun run dev` at the repo root launches this: backend + frontend together.
+# The backend runs inside the Python venv; the frontend is pure Bun/Next and
+# ignores the venv entirely. Full stack (Postgres/Redis/MinIO) is still
+# `docker-compose up` -- this is the lightweight two-process dev loop.
+procs:
+  backend:
+    shell: ". .venv/bin/activate && uvicorn rivet_service.main:app --reload --port 8000"
+  web:
+    shell: "bun run --cwd apps/web dev"

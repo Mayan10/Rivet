@@ -10,12 +10,13 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
 wheels/
+# Note: lib/ below is anchored to root so it does not swallow apps/web/lib/.
 *.egg-info/
 .installed.cfg
 *.egg
@@ -54,4 +55,10 @@ dump.rdb
 .ruff_cache/
 .coverage
 htmlcov/
+
+# Node / frontend (per-app .gitignore covers apps/web; these catch the root)
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
  
