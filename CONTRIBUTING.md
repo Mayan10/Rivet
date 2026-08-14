@@ -30,12 +30,16 @@ rivet generate --width 15 --length 13 \
   --seed 1 --out-dir /tmp/rivet-dev
 ```
 
-Run the web UI locally:
+Run the standalone demo server — the Flask app in `src/rivet/api/` with
+the thin UI in `web/`, no database or accounts involved:
 
 ```bash
 python scripts/run_dev_server.py
 # -> http://127.0.0.1:5000
 ```
+
+(That's separate from the product stack: the FastAPI service and the
+Next.js app, both below.)
 
 ### Service layer (optional, `src/rivet_service/`)
 
@@ -75,6 +79,46 @@ alembic upgrade head` once). `tests/service/` needs a reachable
 `DATABASE_URL` and skips cleanly (not fails) without one, so `pytest -q`
 stays green with no Postgres running at all.
 
+### Frontend (optional, `apps/web/`)
+
+The Next.js app is a separate toolchain — Bun, not pip — so engine
+contributors never need it either, and frontend contributors never need
+the Python venv unless they're running the backend alongside.
+
+```bash
+bun install                 # repo root; it's a Bun workspace
+bun run dev                 # mprocs: FastAPI on :8000 + Next.js on :3000
+bun run --cwd apps/web dev  # or just the frontend, on :3000
+```
+
+The regression gate for the frontend is a full type-check plus lint, not
+unit tests:
+
+```bash
+bun run --cwd apps/web lint
+bun run --cwd apps/web build
+```
+
+More detail — configuration, layout, and conventions — is in
+[`apps/web/README.md`](apps/web/README.md).
+
+## Branches
+
+Work is split by area, not by task, and there are three long-lived
+branches. Please don't open a branch per feature.
+
+- `main` — production. Never commit directly; everything lands via PR.
+- `frontend` — work under `apps/web/`.
+- `backend` — work under `src/`.
+- `chore/<topic>` — CI, infra, tooling, docs; short-lived, deleted after
+  merge.
+
+Open (or update) a PR to `main` from the branch matching the area you're
+changing, and after it merges, fast-forward that branch to `main` before
+starting the next task on it. [`AGENTS.md`](AGENTS.md) has the full
+rules, including the layering boundaries between the engine and the
+service.
+
 ## Project layout
 
 See [`docs/architecture.md`](docs/architecture.md) for how a request flows
@@ -92,6 +136,8 @@ through the system. In short:
 - `src/rivet_service/` — the SaaS service layer (FastAPI, Postgres,
   auth, billing -- `docs/saas-buildout.md`). Depends on `rivet.core`/
   `render`/`export`; nothing in those three ever imports back from here.
+- `apps/web/` — the Next.js app (marketing site today, product UI next).
+  Talks to `rivet_service` over HTTP only; holds no engine logic.
 
 ## Where contributions are most useful
 
@@ -127,8 +173,10 @@ through the system. In short:
 - Describe *why*, not just *what*, in the PR description — especially for
   rulebook or scoring-weight changes, where the reasoning matters more
   than the diff.
-- CI runs `ruff check` and `pytest` on 3.10–3.12; please make sure both
-  pass locally first.
+- CI runs `ruff check` and `pytest` on 3.10–3.12, plus a secret scan and
+  a service-layer job against real Postgres/Redis/MinIO; please make sure
+  the first two pass locally. Changes under `apps/web/` additionally run
+  `lint` and `build` (`.github/workflows/web.yml`).
 
 ## Reporting bugs / requesting features
 

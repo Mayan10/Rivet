@@ -199,7 +199,7 @@ What the service layer adds on top of the engine:
 ```bash
 bun install
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,service]"   # the service extra, not just [dev]
 
 bun run dev     # mprocs: FastAPI on :8000 and Next.js on :3000
 ```
