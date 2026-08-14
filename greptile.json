@@ -6,7 +6,7 @@
   "statusCheck": true,
   "confidenceScoreSection": { "included": true, "collapsible": false, "defaultOpen": true },
   "instructions": "Enforce the working rules in CLAUDE.md. Favor the smallest correct change; flag speculative abstractions and reinvented stdlib. The core library and the service layer are separate concerns and must stay that way.",
-  "ignorePatterns": "bun.lock\napps/web/components/ui/**\napps/web/public/**\n**/migrations/**",
+  "ignorePatterns": "bun.lock\napps/web/components/ui/**\napps/web/public/**",
   "customContext": {
     "files": [
       {
