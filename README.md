@@ -56,9 +56,11 @@ the room program you give it.
   NE, toilet-avoid-NE, entrance orientation) as their own field, always
   structurally separate from cited hard constraints. See
   [`docs/design_rules.md`](docs/design_rules.md#vastu-corevastupy-phase-5--optional-uncited-soft-only).
-- **CLI, API, and web UI** — script it, integrate it, or just use the form.
-- **Lightweight** — no ML framework, no GPU, no system dependencies like
-  Graphviz or Tesseract. `pip install -e .` and go.
+- **CLI, library, HTTP API, and web app** — script it, import it, integrate
+  it, or just use the form.
+- **Lightweight engine** — no ML framework, no GPU, no system dependencies
+  like Graphviz or Tesseract. `pip install -e .` and go. (The hosted
+  service adds Postgres/Redis/S3, but the engine itself needs none of it.)
 
 ## How it works
 
@@ -112,7 +114,10 @@ rivet room-types      # list valid room type identifiers
 rivet rules           # print the design rulebook as JSON
 ```
 
-### Web UI + API
+### Web UI + API (single process)
+
+The quickest way to click through the engine: a Flask app serving the
+bundled UI in `web/`, with no database, accounts, or queue involved.
 
 ```bash
 python scripts/run_dev_server.py
@@ -141,6 +146,10 @@ curl -X POST http://127.0.0.1:5000/api/v1/generate \
 Returns each candidate's score breakdown, inline SVG/PNG preview, and a
 `/download/<token>.dxf` URL.
 
+The same unauthenticated, synchronous endpoint is also served by the
+FastAPI service on port 8000 (see below), which is where it will
+eventually live on its own.
+
 ### As a library
 
 ```python
@@ -160,19 +169,99 @@ layouts = generate(request)          # ranked list of Layout candidates
 export_dxf(layouts[0], "plan.dxf")
 ```
 
+## The product stack
+
+Rivet is also being run as a subscription product. That is a strictly
+separate layer: the engine under `src/rivet/` stays a pure library that
+has never heard of users, orgs, plans, or billing, and everything that
+has lives in `src/rivet_service/` (FastAPI) with a Next.js front end in
+`apps/web/`. The boundary is a hard rule, not a convention — see
+[`AGENTS.md`](AGENTS.md).
+
+What the service layer adds on top of the engine:
+
+- **Accounts and orgs** — registration, email verification, password
+  reset, cookie sessions with CSRF, and scoped API keys.
+- **Projects and history** — generations are persisted, listed, and
+  re-downloadable, with per-plan retention.
+- **Async generation** — requests are validated, quota-checked, queued
+  and answered `202`; a worker runs the search and writes artifacts to
+  object storage (MinIO locally, S3 in deploy).
+- **Entitlements and quota** — monthly generation counts, candidates per
+  run, DXF gating, and preview watermarking, enforced in the service and
+  never inside the generator.
+- **Billing** — Stripe checkout, customer portal, and webhooks.
+- **Hardening** — per-IP/per-org rate limits, explicit CORS origins,
+  structured logging with request ids, Sentry, and account deletion.
+
+### Dev loop
+
+```bash
+bun install
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+bun run dev     # mprocs: FastAPI on :8000 and Next.js on :3000
+```
+
+`bun run dev` runs just the two app processes. For the full topology
+(Postgres, Redis, MinIO, API, worker):
+
+```bash
+docker compose up
+docker compose run --rm api alembic upgrade head   # first run only
+```
+
+Migrations are deliberately a separate step, never a container
+entrypoint — two containers booting at once would race to apply them.
+Every schema change goes through Alembic.
+
+### Plans
+
+Defined in `src/rivet_service/billing/plans.py`, which is the source of
+truth for enforcement; `apps/web/lib/plans.ts` mirrors it for the
+pricing page.
+
+| | Free | Pro ($29/mo) | Studio ($99/mo) |
+|---|---|---|---|
+| Generations / month | 5 | 200 | 1,000 |
+| Candidates / run | 1 | 3 | 5 |
+| PNG + SVG | watermarked | yes | yes |
+| DXF export | — | yes | yes |
+| History retention | 7 days | unlimited | unlimited |
+| API keys | — | — | yes |
+| Priority queue | — | — | yes |
+
+### Deploying
+
+`deploy/terraform/` stands up a staging environment on AWS (VPC, ALB,
+ECS, RDS, ElastiCache, S3, ECR, Secrets Manager) against the production
+`Dockerfile`. Operational procedures are in
+[`docs/runbook.md`](docs/runbook.md); the phased build-out plan the
+service follows is [`docs/saas-buildout.md`](docs/saas-buildout.md).
+
 ## Project structure
 
 ```
-src/rivet/
-├── core/       # generation engine: models, rulebook, graph, layout
-│               # search, scoring, opening placement — no I/O
-├── render/     # PNG + SVG renderers, driven purely by Layout geometry
-├── export/     # DXF export (ezdxf)
-├── api/        # Flask API
-└── cli.py      # scriptable entry point
-web/            # the web UI (thin client over the API)
-tests/          # pytest suite
-docs/           # design rules + architecture
+src/rivet/            # the engine — a pure library, no I/O, no service imports
+├── core/             # models, rulebook, graph, layout search, scoring,
+│                     # opening placement, metrics
+├── render/           # PNG + SVG renderers, driven purely by Layout geometry
+├── export/           # DXF export (ezdxf)
+├── api/              # Flask API (the standalone demo server)
+└── cli.py            # scriptable entry point
+src/rivet_service/    # the SaaS layer — everything the engine must not know
+├── api/              # FastAPI routers (v1), schemas, validation, errors
+├── auth/             # sessions, CSRF, API keys, password + token handling
+├── billing/          # plans, entitlements, Stripe client + webhooks
+├── db/               # SQLAlchemy models and session
+├── jobs/             # queue, tasks, worker
+└── storage/          # local + S3 artifact storage
+apps/web/             # Next.js app (marketing site, pricing, legal)
+web/                  # legacy UI served by the Flask demo server
+deploy/terraform/     # staging infrastructure
+tests/                # pytest suite
+docs/                 # design rules, architecture, build-out plan, runbook
 ```
 
 ## Limitations
@@ -193,6 +282,11 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, project layout, and
 where contributions are most useful (rulebook corrections with a cited
 rationale are especially welcome). Please also read the
 [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Work is split by area rather than by task: `frontend` for `apps/web`,
+`backend` for `src/`, and short-lived `chore/<topic>` branches for CI,
+infra, and docs. Everything reaches `main` by PR. The full workflow and
+the layering rules that go with it are in [`AGENTS.md`](AGENTS.md).
 
 ## License
 
