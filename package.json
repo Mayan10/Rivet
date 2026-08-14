@@ -1,0 +1,17 @@
+{
+  "name": "rivet-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "packageManager": "bun@1.3.14",
+  "scripts": {
+    "dev": "mprocs",
+    "web": "bun run --cwd apps/web dev",
+    "build": "bun run --cwd apps/web build",
+    "lint": "bun run --cwd apps/web lint"
+  },
+  "devDependencies": {
+    "mprocs": "^0.7.1"
+  },
+  "trustedDependencies": ["mprocs"]
+}

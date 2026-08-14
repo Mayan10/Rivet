@@ -19,6 +19,11 @@ jobs:
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
+        env:
+          # gitleaks-action@v2 requires a token to scan pull requests (it
+          # reads the PR commit range via the API). Not needed for push
+          # events, which is why this only surfaced on the first PR.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   test:
     runs-on: ubuntu-latest
