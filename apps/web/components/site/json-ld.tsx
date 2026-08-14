@@ -1,6 +1,5 @@
 import { PLANS } from "@/lib/plans";
-
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+import { siteUrl } from "@/lib/site";
 
 // Organization + WebSite + SoftwareApplication structured data for rich results.
 const schema = {
