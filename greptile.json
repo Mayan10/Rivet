@@ -1,0 +1,46 @@
+{
+  "commentTypes": ["logic", "syntax", "style"],
+  "strictness": 2,
+  "triggerOnUpdates": true,
+  "triggerOnDrafts": false,
+  "statusCheck": true,
+  "confidenceScoreSection": { "included": true, "collapsible": false, "defaultOpen": true },
+  "instructions": "Enforce the working rules in CLAUDE.md. Favor the smallest correct change; flag speculative abstractions and reinvented stdlib. The core library and the service layer are separate concerns and must stay that way.",
+  "ignorePatterns": "bun.lock\napps/web/components/ui/**\napps/web/public/**",
+  "customContext": {
+    "files": [
+      {
+        "scope": ["**/*"],
+        "path": "CLAUDE.md",
+        "description": "Authoritative working rules: layer separation, determinism contract, code-citation requirement, hard-vs-soft constraint separation."
+      },
+      {
+        "scope": ["src/rivet/**"],
+        "path": "docs/architecture.md",
+        "description": "Architecture and layer boundaries."
+      }
+    ],
+    "rules": [
+      {
+        "scope": ["src/rivet/core/**", "src/rivet/render/**", "src/rivet/export/**"],
+        "rule": "Pure library. Must NOT import from rivet_service, touch a database, read environment variables, make network calls, or reference users/orgs/plans/billing. Flag any such import, or any user_id/org_id threaded into the generator."
+      },
+      {
+        "scope": ["src/rivet/core/**"],
+        "rule": "Determinism is a contract: no set() iteration, dict-ordering assumptions, hash() of a string, or unordered parallelism in the search/scoring/ordering path or anything downstream of it. Any change to search, scoring, or ordering must come with a test that runs the same request in two subprocesses and compares output bytes."
+      },
+      {
+        "scope": ["src/rivet/core/**"],
+        "rule": "Building-code minimums are HARD constraints and belong in a validator that rejects a layout, never in the soft penalty score. Any dimensional value taken from a building code must carry a source comment naming the code and clause (e.g. TNCDBR 2019 Rule 52). Flag hardcoded code-derived dimensions with no citation, and any invented code value."
+      },
+      {
+        "scope": ["src/**/*.py"],
+        "rule": "Public functions need type hints. New modules need tests in the same change. Every schema change goes through an Alembic migration -- no manual DDL, no create_all() outside test fixtures."
+      },
+      {
+        "scope": ["apps/web/**"],
+        "rule": "Frontend reaches the backend only through the API client (lib/api.ts); never embed secrets in client code. Keep SEO metadata (title/description/canonical/OG) intact on marketing routes."
+      }
+    ]
+  }
+}
