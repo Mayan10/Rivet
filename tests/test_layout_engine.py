@@ -1,8 +1,8 @@
 import itertools
 
 import pytest
-from conftest import assert_feasible
 
+from conftest import assert_feasible
 from rivet.core.generator import generate
 from rivet.core.models import (
     GenerationRequest,

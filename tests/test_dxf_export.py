@@ -15,8 +15,8 @@ from pathlib import Path
 
 import ezdxf
 import pytest
-from conftest import assert_feasible
 
+from conftest import assert_feasible
 from rivet.core.generator import generate
 from rivet.export.dxf import export_dxf, export_dxf_bytes
 from rivet.export.dxf.blocks import (

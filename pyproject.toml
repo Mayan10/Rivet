@@ -40,7 +40,7 @@ dev = [
     # plain httpx now prints a deprecation warning on every import.
     "httpx2>=2.0.0",
 ]
-# The SaaS service layer (src/rivet_service/) -- kept out of the base
+# The SaaS service layer (apps/api/rivet_service/) -- kept out of the base
 # install so `pip install -e .` (engine + CLI) stays lightweight, per
 # README's "no heavy dependencies" claim. See docs/saas-buildout.md.
 service = [
@@ -66,7 +66,9 @@ Homepage = "https://github.com/Mayan10/Rivet"
 Issues = "https://github.com/Mayan10/Rivet/issues"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+# Monorepo layout: the engine library lives in packages/engine, the FastAPI
+# service in apps/api. Import names stay `rivet` and `rivet_service`.
+where = ["packages/engine", "apps/api"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -74,9 +76,12 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# First-party roots so import sorting classifies rivet / rivet_service
+# correctly under the monorepo layout.
+src = ["packages/engine", "apps/api", "tests"]
 
 [tool.ruff.lint]
 # B008 (function call in a default argument) is a false positive for
 # FastAPI's own documented Depends()/Query()/Body() pattern -- every
-# route in src/rivet_service/ uses it, per FastAPI's own docs.
+# route in apps/api/rivet_service/ uses it, per FastAPI's own docs.
 ignore = ["B008"]

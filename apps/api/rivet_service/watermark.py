@@ -1,7 +1,7 @@
 """Free-tier watermarking, applied by the worker (jobs/tasks.py) to
 already-rendered PNG/SVG bytes -- post-processing in the service layer,
 not a parameter on the engine's renderers. See docs/prompts.md Phase 9
-status for why: ``src/rivet/render/`` is a protected pure-library
+status for why: ``packages/engine/rivet/render/`` is a protected pure-library
 directory for these service phases, and a business-model watermark is a
 service-layer concern layered on a finished drawing, not something the
 renderer needs geometry-aware knowledge to draw -- it never needs to know

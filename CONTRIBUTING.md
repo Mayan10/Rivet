@@ -17,7 +17,7 @@ Run the test suite and linter before opening a PR:
 
 ```bash
 pytest -q
-ruff check src tests
+ruff check packages apps tests
 ```
 
 Try the CLI end-to-end (also a fast way to sanity-check a change to the
@@ -37,7 +37,7 @@ python scripts/run_dev_server.py
 # -> http://127.0.0.1:5000
 ```
 
-### Service layer (optional, `src/rivet_service/`)
+### Service layer (optional, `apps/api/rivet_service/`)
 
 The SaaS build-out (`docs/saas-buildout.md`) lives in a separate package
 with its own dependency extra, so plain engine/CLI contributors never
@@ -80,22 +80,22 @@ stays green with no Postgres running at all.
 See [`docs/architecture.md`](docs/architecture.md) for how a request flows
 through the system. In short:
 
-- `src/rivet/core/` — the generation engine (models, rulebook, graph,
+- `packages/engine/rivet/core/` — the generation engine (models, rulebook, graph,
   layout search, scoring, opening placement). No I/O, no framework
   dependencies. This is the part to test most thoroughly.
-- `src/rivet/render/` — turns a `Layout` into PNG/SVG. No dataset imagery,
+- `packages/engine/rivet/render/` — turns a `Layout` into PNG/SVG. No dataset imagery,
   no external image assets — everything is drawn from geometry.
-- `src/rivet/export/` — DXF export via `ezdxf`.
-- `src/rivet/api/` and `web/` — the Flask API and its thin HTML/CSS/JS client.
-- `src/rivet/cli.py` — scriptable entry point, also useful as a fast
+- `packages/engine/rivet/export/` — DXF export via `ezdxf`.
+- `packages/engine/rivet/api/` and `web/` — the Flask API and its thin HTML/CSS/JS client.
+- `packages/engine/rivet/cli.py` — scriptable entry point, also useful as a fast
   smoke test of the whole pipeline.
-- `src/rivet_service/` — the SaaS service layer (FastAPI, Postgres,
+- `apps/api/rivet_service/` — the SaaS service layer (FastAPI, Postgres,
   auth, billing -- `docs/saas-buildout.md`). Depends on `rivet.core`/
   `render`/`export`; nothing in those three ever imports back from here.
 
 ## Where contributions are most useful
 
-- **Design rules** (`src/rivet/core/rules.py`): if you have domain
+- **Design rules** (`packages/engine/rivet/core/rules.py`): if you have domain
   expertise (architecture, civil engineering) and can point out a rule
   that's wrong, missing, or too US/India-centric, that's a high-value PR.
   Please include a rationale (a standard, a code reference, or a clear

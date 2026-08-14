@@ -23,7 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md ./
-COPY src ./src
+COPY packages/engine ./packages/engine
+COPY apps/api ./apps/api
 
 RUN pip install --no-cache-dir --prefix=/install ".[service]"
 
@@ -36,10 +37,11 @@ WORKDIR /app
 
 COPY --from=builder /install /usr/local
 # rivet_service/rivet are already importable from the site-packages copy
-# above (a real, non-editable install) -- this second copy exists only
-# because alembic.ini's script_location is a path relative to the
-# container's working directory, not an importable module path.
-COPY src ./src
+# above (a real, non-editable install) -- this copy exists only because
+# alembic.ini's script_location is a path relative to the container's
+# working directory (apps/api/rivet_service/db/migrations), not an
+# importable module path. Only the service tree is needed for migrations.
+COPY apps/api ./apps/api
 COPY alembic.ini ./
 COPY scripts ./scripts
 

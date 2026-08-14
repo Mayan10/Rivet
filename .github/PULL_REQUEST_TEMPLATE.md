@@ -4,12 +4,12 @@
 
 ## Testing
 
-<!-- `pytest -q` and `ruff check src tests` output, plus anything
+<!-- `pytest -q` and `ruff check packages apps tests` output, plus anything
      specific to this change (e.g. a `rivet generate` command you ran
      to sanity-check a layout-engine change). -->
 
 - [ ] `pytest -q` passes
-- [ ] `ruff check src tests` passes
+- [ ] `ruff check packages apps tests` passes
 - [ ] If this touches `core/layout_engine.py` or `core/scoring.py`, ran the
       suite against a few different seeds locally, not just once
 - [ ] If this touches `export/dxf.py`, confirmed `ezdxf.readfile(...).audit()`
